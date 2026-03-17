@@ -4,14 +4,16 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   View,
 } from 'react-native';
 import { COLORS } from '../../constants/colors';
+import { FONTS } from '../../constants/fonts';
 import { authService } from '../../services/api';
 import { saveTokens } from '../../services/storage';
+import { Logo } from '../../components/ui/Logo';
+import { GradientButton } from '../../components/ui/GradientButton';
 
 export default function LoginScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
@@ -22,20 +24,20 @@ export default function LoginScreen({ navigation }: any) {
 
   const handleLogin = async () => {
     if (!email || !password) {
-        setError('Please fill in all fields');
-        return;
+      setError('Please fill in all fields');
+      return;
     }
     setIsLoading(true);
     setError('');
     try {
-        const data = await authService.login({ email, password });
-        await saveTokens(data.accessToken, data.refreshToken);
-        // TODO: перейти на головний екран
-        console.log('Logged in successfully!');
+      const data = await authService.login({ email, password });
+      await saveTokens(data.accessToken, data.refreshToken);
+      // TODO: перейти на головний екран
+      console.log('Logged in successfully!');
     } catch (err: any) {
-        setError(err.response?.data?.error || 'Login failed');
+      setError(err.response?.data?.error || 'Login failed');
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -45,7 +47,7 @@ export default function LoginScreen({ navigation }: any) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.inner}>
-        <Text style={styles.title}>MovieCrush</Text>
+        <Logo style={styles.logo} />
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -71,17 +73,12 @@ export default function LoginScreen({ navigation }: any) {
           secureTextEntry
         />
 
-        <TouchableOpacity
-          style={styles.button}
+        <GradientButton
+          label="Log In"
           onPress={handleLogin}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color={COLORS.background} />
-          ) : (
-            <Text style={styles.buttonText}>Log In</Text>
-          )}
-        </TouchableOpacity>
+          isLoading={isLoading}
+          style={styles.button}
+        />
 
         <TouchableOpacity onPress={() => navigation.navigate('Register')}>
           <Text style={styles.link}>
@@ -105,12 +102,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
   },
-  title: {
+  logo: {
     fontSize: 36,
-    color: COLORS.pink,
-    fontWeight: '700',
     marginBottom: 40,
-    letterSpacing: 1,
   },
   input: {
     width: '100%',
@@ -123,34 +117,27 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 16,
     marginBottom: 16,
+    fontFamily: FONTS.regular,
   },
   inputFocused: {
     borderColor: COLORS.pink,
   },
   button: {
-    width: '100%',
-    maxWidth: 400,
-    backgroundColor: COLORS.gold,
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
     marginTop: 8,
     marginBottom: 24,
-  },
-  buttonText: {
-    color: COLORS.background,
-    fontWeight: 'bold',
-    fontSize: 16,
+    borderRadius: 16,
   },
   error: {
     color: COLORS.error,
     marginBottom: 16,
     fontSize: 14,
+    fontFamily: FONTS.regular,
   },
   link: {
     color: COLORS.gray,
     fontSize: 14,
     fontStyle: 'italic',
+    fontFamily: FONTS.regular,
   },
   linkAccent: {
     color: COLORS.pink,

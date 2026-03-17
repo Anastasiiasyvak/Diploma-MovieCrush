@@ -5,13 +5,15 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { COLORS } from '../../constants/colors';
+import { FONTS } from '../../constants/fonts';
 import { authService } from '../../services/api';
 import { saveTokens } from '../../services/storage';
+import { Logo } from '../../components/ui/Logo';
+import { GradientButton } from '../../components/ui/GradientButton';
 
 export default function RegisterScreen({ navigation }: any) {
   const [form, setForm] = useState({
@@ -51,14 +53,14 @@ export default function RegisterScreen({ navigation }: any) {
     if (!validate()) return;
     setIsLoading(true);
     try {
-        const data = await authService.register(form);
-        await saveTokens(data.accessToken, data.refreshToken);
-        // TODO: перейти на головний екран
-        console.log('Registered successfully!');
+      const data = await authService.register(form);
+      await saveTokens(data.accessToken, data.refreshToken);
+      // TODO: перейти на головний екран
+      console.log('Registered successfully!');
     } catch (err: any) {
-        setError(err.response?.data?.error || 'Registration failed');
+      setError(err.response?.data?.error || 'Registration failed');
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -73,7 +75,7 @@ export default function RegisterScreen({ navigation }: any) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>MovieCrush</Text>
+        <Logo style={styles.logo} />
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -127,17 +129,12 @@ export default function RegisterScreen({ navigation }: any) {
           onBlur={() => setFocusedField(null)}
         />
 
-        <TouchableOpacity
-          style={styles.button}
+        <GradientButton
+          label="Create Account"
           onPress={handleRegister}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color={COLORS.background} />
-          ) : (
-            <Text style={styles.buttonText}>Create Account</Text>
-          )}
-        </TouchableOpacity>
+          isLoading={isLoading}
+          style={styles.button}
+        />
 
         <TouchableOpacity onPress={() => navigation.navigate('Login')}>
           <Text style={styles.link}>
@@ -161,12 +158,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
   },
-  title: {
+  logo: {
     fontSize: 36,
-    color: COLORS.pink,
-    fontWeight: '700',
     marginBottom: 40,
-    letterSpacing: 1,
   },
   input: {
     width: '100%',
@@ -179,34 +173,27 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 16,
     marginBottom: 16,
+    fontFamily: FONTS.regular,
   },
   inputFocused: {
     borderColor: COLORS.pink,
   },
   button: {
-    width: '100%',
-    maxWidth: 400,
-    backgroundColor: COLORS.gold,
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
     marginTop: 8,
     marginBottom: 24,
-  },
-  buttonText: {
-    color: COLORS.background,
-    fontWeight: 'bold',
-    fontSize: 16,
+    borderRadius: 16,
   },
   error: {
     color: COLORS.error,
     marginBottom: 16,
     fontSize: 14,
+    fontFamily: FONTS.regular,
   },
   link: {
     color: COLORS.gray,
     fontSize: 14,
     fontStyle: 'italic',
+    fontFamily: FONTS.regular,
   },
   linkAccent: {
     color: COLORS.pinkDark,
