@@ -1,12 +1,7 @@
 import React, { useState } from 'react';
 import {
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  View,
+  Text, TouchableOpacity, StyleSheet,
+  KeyboardAvoidingView, Platform, View,
 } from 'react-native';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/fonts';
@@ -14,76 +9,103 @@ import { authService } from '../../services/api';
 import { saveTokens } from '../../services/storage';
 import { Logo } from '../../components/ui/Logo';
 import { GradientButton } from '../../components/ui/GradientButton';
+import { InputField } from '../../components/ui/InputField';
 
 export default function LoginScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [focusedField, setFocusedField] = useState<string | null>(null);
+
+  const validateField = (field: string, value: string): string => {
+    if (field === 'email') {
+      if (!value) return 'Email is required';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Enter a valid email';
+    }
+    if (field === 'password') {
+      if (!value) return 'Password is required';
+    }
+    return '';
+  };
+
+  const handleBlur = (field: string, value: string) => {
+    setTouched(prev => ({ ...prev, [field]: true }));
+    setFieldErrors(prev => ({ ...prev, [field]: validateField(field, value) }));
+  };
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      setError('Please fill in all fields');
-      return;
-    }
+    const emailErr = validateField('email', email);
+    const passwordErr = validateField('password', password);
+    setFieldErrors({ email: emailErr, password: passwordErr });
+    setTouched({ email: true, password: true });
+    if (emailErr || passwordErr) return;
+
     setIsLoading(true);
-    setError('');
     try {
-      const data = await authService.login({ email, password });
+      const data = await authService.login({
+        email: email.trim().toLowerCase(),
+        password,
+      });
       await saveTokens(data.accessToken, data.refreshToken);
-      // TODO: перейти на головний екран
-      console.log('Logged in successfully!');
+      navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Login failed');
+      const message = err.response?.data?.error || 'Something went wrong. Please try again.';
+      const field = err.response?.data?.field;
+      if (field) {
+        setFieldErrors({ [field]: message });
+      } else {
+        setFieldErrors({ general: message });
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={styles.inner}>
         <Logo style={styles.logo} />
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {fieldErrors.general ? (
+          <View style={styles.generalError}>
+            <Text style={styles.generalErrorText}>{fieldErrors.general}</Text>
+          </View>
+        ) : null}
 
-        <TextInput
-          style={[styles.input, focusedField === 'email' && styles.inputFocused]}
+        <InputField
           placeholder="Email"
-          placeholderTextColor={COLORS.gray}
           value={email}
-          onChangeText={v => { setEmail(v); if (error) setError(''); }}
-          onFocus={() => setFocusedField('email')}
-          onBlur={() => setFocusedField(null)}
+          onChangeText={v => {
+            setEmail(v);
+            if (touched.email) setFieldErrors(prev => ({ ...prev, email: validateField('email', v), general: '' }));
+          }}
+          onBlur={() => handleBlur('email', email)}
           keyboardType="email-address"
-          autoCapitalize="none"
-        />
-        <TextInput
-          style={[styles.input, focusedField === 'password' && styles.inputFocused]}
-          placeholder="Password"
-          placeholderTextColor={COLORS.gray}
-          value={password}
-          onChangeText={v => { setPassword(v); if (error) setError(''); }}
-          onFocus={() => setFocusedField('password')}
-          onBlur={() => setFocusedField(null)}
-          secureTextEntry
+          error={touched.email ? fieldErrors.email : ''}
         />
 
-        <GradientButton
-          label="Log In"
-          onPress={handleLogin}
-          isLoading={isLoading}
-          style={styles.button}
+        <InputField
+          placeholder="Password"
+          value={password}
+          onChangeText={v => {
+            setPassword(v);
+            if (touched.password) setFieldErrors(prev => ({ ...prev, password: validateField('password', v), general: '' }));
+          }}
+          onBlur={() => handleBlur('password', password)}
+          isPassword
+          error={touched.password ? fieldErrors.password : ''}
         />
+
+        <TouchableOpacity style={styles.forgotWrapper} onPress={() => navigation.navigate('ForgotPassword')}>
+          <Text style={styles.forgotText}>Forgot password?</Text>
+        </TouchableOpacity>
+
+        <GradientButton label="Log In" onPress={handleLogin} isLoading={isLoading} style={styles.button} />
 
         <TouchableOpacity onPress={() => navigation.navigate('Register')}>
           <Text style={styles.link}>
-            Don't have an account?{' '}
-            <Text style={styles.linkAccent}>Sign up here</Text>
+            Don't have an account?{' '}<Text style={styles.linkAccent}>Sign up</Text>
           </Text>
         </TouchableOpacity>
       </View>
@@ -92,56 +114,14 @@ export default function LoginScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  inner: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  logo: {
-    fontSize: 36,
-    marginBottom: 40,
-  },
-  input: {
-    width: '100%',
-    maxWidth: 400,
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: COLORS.gold,
-    borderRadius: 16,
-    padding: 14,
-    color: COLORS.white,
-    fontSize: 16,
-    marginBottom: 16,
-    fontFamily: FONTS.regular,
-  },
-  inputFocused: {
-    borderColor: COLORS.pink,
-  },
-  button: {
-    marginTop: 8,
-    marginBottom: 24,
-    borderRadius: 16,
-  },
-  error: {
-    color: COLORS.error,
-    marginBottom: 16,
-    fontSize: 14,
-    fontFamily: FONTS.regular,
-  },
-  link: {
-    color: COLORS.gray,
-    fontSize: 14,
-    fontStyle: 'italic',
-    fontFamily: FONTS.regular,
-  },
-  linkAccent: {
-    color: COLORS.pink,
-    fontWeight: '500',
-    fontStyle: 'italic',
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  inner: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  logo: { fontSize: 36, marginBottom: 40 },
+  generalError: { width: '100%', maxWidth: 400, backgroundColor: 'rgba(255,77,77,0.12)', borderWidth: 1, borderColor: 'rgba(255,77,77,0.4)', borderRadius: 12, padding: 12, marginBottom: 16 },
+  generalErrorText: { color: COLORS.error, fontSize: 13, fontFamily: FONTS.regular, textAlign: 'center' },
+  forgotWrapper: { width: '100%', maxWidth: 400, alignItems: 'flex-end', marginBottom: 8, marginTop: 2 },
+  forgotText: { color: COLORS.pink, fontSize: 13, fontFamily: FONTS.regular },
+  button: { marginTop: 8, marginBottom: 24, borderRadius: 16 },
+  link: { color: COLORS.gray, fontSize: 14, fontStyle: 'italic', fontFamily: FONTS.regular },
+  linkAccent: { color: COLORS.pink, fontWeight: '500', fontStyle: 'italic' },
 });
