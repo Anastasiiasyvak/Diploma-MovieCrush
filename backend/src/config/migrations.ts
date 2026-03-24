@@ -59,6 +59,12 @@ const createTables = async () => {
     `);
     console.log('Table user_lists ready');
 
+    await pool.query(`
+      ALTER TABLE user_lists
+        ADD COLUMN IF NOT EXISTS is_private BOOLEAN DEFAULT FALSE;
+    `);
+    console.log('is_private column ready');
+
     console.log('All tables created successfully!');
   } catch (err) {
     console.error('Migration error:', err);

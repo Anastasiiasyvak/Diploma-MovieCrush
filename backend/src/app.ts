@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import userRoutes from './modules/user/user.routes';
+import profileRoutes from './modules/user/profile.routes';
 
 const app = express();
 
@@ -24,5 +25,6 @@ app.get('/health', (req: Request, res: Response) => {
 });
 
 app.use('/api/auth', userRoutes);
+app.use('/api/profile', profileRoutes);
 
 export default app;
