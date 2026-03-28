@@ -12,7 +12,6 @@ import { TouchableOpacity } from 'react-native';
 import { useFonts } from 'expo-font';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/fonts';
-import { Logo } from '../../components/ui/Logo';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { OutlineButton } from '../../components/ui/OutlineButton';
 
@@ -99,10 +98,6 @@ export default function WelcomeScreen({ navigation }: any) {
       <View style={styles.orb1} />
       <View style={styles.orb2} />
 
-      {/* Logo */}
-      <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
-        <Logo />
-      </Animated.View>
 
       {/* Main Content */}
       <View style={styles.mainContent}>

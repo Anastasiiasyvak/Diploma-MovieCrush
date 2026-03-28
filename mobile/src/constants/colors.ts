@@ -10,4 +10,8 @@ export const COLORS = {
   success: '#00cc66',
   inputBorder: '#ffd700',
   transparent: 'transparent',
-};
+  darkGray: '#444444',
+  cardDark: '#1a1a1a',
+  cardBg: '#111111',
+  cardTextLight: '#555555'
+} as const;

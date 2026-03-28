@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   RefreshControl, ActivityIndicator, Modal,
   TextInput, Dimensions, Platform, StatusBar, Switch,
-  Alert, 
-  Pressable,
+  Pressable, Alert, Image,
 } from 'react-native';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/fonts';
@@ -14,18 +14,33 @@ import { SocialButton } from '../../components/ui/SocialButton';
 import { CustomAlert } from '../../components/ui/CustomAlert';
 import { profileService, ProfileData, UserList } from '../../services/profileService';
 import { clearTokens } from '../../services/storage';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 const MAX_WIDTH = 480;
 const CONTENT_WIDTH = Math.min(width, MAX_WIDTH);
 const GRID_ITEM_SIZE = (CONTENT_WIDTH - 4) / 3;
 
+
+const showAlert = (title: string, message: string) => {
+  if (Platform.OS === 'web') {
+    window.alert(message);
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
+
 const Avatar: React.FC<{ imageUrl?: string; size?: number }> = ({ imageUrl, size = 84 }) => (
   <View style={[styles.avatarWrapper, { width: size, height: size, borderRadius: size / 2 }]}>
-    <View style={[styles.avatarPlaceholder, { width: size, height: size, borderRadius: size / 2 }]}>
-      <View style={styles.silhouetteHead} />
-      <View style={styles.silhouetteBody} />
-    </View>
+    {imageUrl ? (
+      <Image source={{ uri: imageUrl }} style={styles.avatarImage} />
+    ) : (
+      <View style={[styles.avatarPlaceholder, { width: size, height: size, borderRadius: size / 2 }]}>
+        <View style={styles.silhouetteHead} />
+        <View style={styles.silhouetteBody} />
+      </View>
+    )}
   </View>
 );
 
@@ -41,7 +56,6 @@ const EmptyGridItem: React.FC = () => (
   </View>
 );
 
-
 export default function ProfileScreen({ navigation }: any) {
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,17 +67,12 @@ export default function ProfileScreen({ navigation }: any) {
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [friendsType, setFriendsType] = useState<'friends' | 'followers' | 'following'>('friends');
-  
-  const [deleteAlert, setDeleteAlert] = useState<{
-    visible: boolean;
-    list: UserList | null;
-  }>({ visible: false, list: null });
-
-  const [privacyAlert, setPrivacyAlert] = useState<{
-    visible: boolean;
-    list: UserList | null;
-    newPrivacy: boolean;
-  }>({ visible: false, list: null, newPrivacy: false });
+  const [deleteAlert, setDeleteAlert] = useState<{ visible: boolean; list: UserList | null }>({
+    visible: false, list: null,
+  });
+  const [privacyAlert, setPrivacyAlert] = useState<{ visible: boolean; list: UserList | null; newPrivacy: boolean }>({
+    visible: false, list: null, newPrivacy: false,
+  });
 
   const loadProfile = useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
@@ -81,9 +90,20 @@ export default function ProfileScreen({ navigation }: any) {
     }
   }, [navigation]);
 
-  useEffect(() => { loadProfile(); }, [loadProfile]);
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile(true);
+    }, [loadProfile])
+  );
 
-  const handleRefresh = () => { setIsRefreshing(true); loadProfile(true); };
+  const handleRefresh = () => loadProfile(true);
+
+  const closeCreateList = () => {
+    setShowCreateList(false);
+    setNewListName('');
+    setNewListPrivate(false);
+    setIsCreatingList(false);
+  };
 
   const handleCreateList = async () => {
     if (!newListName.trim()) return;
@@ -95,89 +115,47 @@ export default function ProfileScreen({ navigation }: any) {
         user: { ...prev.user, custom_lists_count: prev.user.custom_lists_count + 1 },
         lists: [...prev.lists, list],
       } : prev);
-      setNewListName('');
-      setNewListPrivate(false);
-      setShowCreateList(false);
+      closeCreateList();
       setActiveTab(list.id.toString());
-    } catch {
-      if (Platform.OS === 'web') {
-        window.alert('Could not create list. Try again.');
-      } else {
-        Alert.alert('Error', 'Could not create list. Try again.');
-      }
+    } catch (err) {
+      console.error('Create list error:', err);
+      showAlert('Error', 'Could not create list. Try again.');
     } finally {
       setIsCreatingList(false);
     }
   };
 
-  const handleDeleteList = (list: UserList) => {
-    setDeleteAlert({ visible: true, list });
-  };
-
   const confirmDelete = async () => {
     const list = deleteAlert.list;
     if (!list) return;
-    
+    setDeleteAlert({ visible: false, list: null });
     try {
       await profileService.deleteCustomList(list.id);
-      setProfileData(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          user: { ...prev.user, custom_lists_count: Math.max(0, prev.user.custom_lists_count - 1) },
-          lists: prev.lists.filter(l => l.id !== list.id),
-        };
-      });
+      setProfileData(prev => prev ? {
+        ...prev,
+        user: { ...prev.user, custom_lists_count: Math.max(0, prev.user.custom_lists_count - 1) },
+        lists: prev.lists.filter(l => l.id !== list.id),
+      } : prev);
       setActiveTab('watched');
-      setDeleteAlert({ visible: false, list: null });
     } catch (err) {
       console.error('Delete error:', err);
-      if (Platform.OS === 'web') {
-        window.alert('Could not delete list. Try again.');
-      } else {
-        Alert.alert('Error', 'Could not delete list. Try again.');
-      }
+      showAlert('Error', 'Could not delete list. Try again.');
     }
-  };
-
-  const handleTogglePrivacy = (list: UserList) => {
-    const newPrivacy = !list.is_private;
-    const actionText = newPrivacy ? 'private' : 'public';
-    setPrivacyAlert({ visible: true, list, newPrivacy });
   };
 
   const confirmTogglePrivacy = async () => {
     const { list, newPrivacy } = privacyAlert;
     if (!list) return;
-
+    setPrivacyAlert({ visible: false, list: null, newPrivacy: false });
     try {
       const { list: updated } = await profileService.toggleListPrivacy(list.id, newPrivacy);
       setProfileData(prev => prev ? {
         ...prev,
         lists: prev.lists.map(l => l.id === updated.id ? updated : l),
       } : prev);
-      setPrivacyAlert({ visible: false, list: null, newPrivacy: false });
-    } catch {
-      if (Platform.OS === 'web') {
-        window.alert('Could not update list privacy.');
-      } else {
-        Alert.alert('Error', 'Could not update list privacy.');
-      }
-    }
-  };
-
-  const handleSocialAdd = (type: 'telegram' | 'instagram') => {
-    if (Platform.OS === 'web') {
-      window.alert(`You can add your ${type} in Settings.`);
-    } else {
-      Alert.alert(
-        `Add ${type === 'telegram' ? 'Telegram' : 'Instagram'}`,
-        'You can add your social links in Settings.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Go to Settings', onPress: () => navigation.navigate('Settings') },
-        ]
-      );
+    } catch (err) {
+      console.error('Toggle privacy error:', err);
+      showAlert('Error', 'Could not update list privacy.');
     }
   };
 
@@ -200,13 +178,15 @@ export default function ProfileScreen({ navigation }: any) {
     new Date(dateStr).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const defaultTabs = [
-    { key: 'watched',   label: 'Watched' },
+    { key: 'watched', label: 'Watched' },
     { key: 'favorites', label: 'Favorites' },
     { key: 'watchlist', label: 'Watchlist' },
   ];
 
   const friendsCount =
-    friendsType === 'friends' ? user.friends_count : friendsType === 'followers' ? user.followers_count : user.following_count;
+    friendsType === 'friends' ? user.friends_count :
+    friendsType === 'followers' ? user.followers_count :
+    user.following_count;
 
   return (
     <View style={styles.container}>
@@ -223,9 +203,12 @@ export default function ProfileScreen({ navigation }: any) {
 
           {/* Header */}
           <View style={styles.header}>
+            <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7}>
+              <Ionicons name="chevron-back" size={28} color={COLORS.white} />
+            </TouchableOpacity>
             <Logo />
             <TouchableOpacity onPress={() => navigation.navigate('Settings')} activeOpacity={0.7}>
-              <Text style={styles.settingsIcon}>⚙</Text>
+              <Text style={styles.settingsIcon}>⚙️</Text>
             </TouchableOpacity>
           </View>
 
@@ -235,17 +218,21 @@ export default function ProfileScreen({ navigation }: any) {
             <Text style={styles.username}>{user.username}</Text>
             {fullName ? <Text style={styles.fullName}>{fullName}</Text> : null}
             <Text style={styles.memberSince}>Member since {formatMemberSince(user.created_at)}</Text>
-            <View style={styles.socialsRow}>
-              <SocialButton type="telegram" username={user.telegram_username} onAddPress={() => handleSocialAdd('telegram')} />
-              <SocialButton type="instagram" username={user.instagram_username} onAddPress={() => handleSocialAdd('instagram')} />
-            </View>
+            {(user.telegram_username || user.instagram_username) && (
+              <View style={styles.socialsRow}>
+                <SocialButton type="telegram" username={user.telegram_username} />
+                <SocialButton type="instagram" username={user.instagram_username} />
+              </View>
+            )}
           </View>
 
-          {/* friend/followers/following */}
+          {/* Friends / Followers / Following */}
           <View style={styles.followRow}>
             {(['friends', 'followers', 'following'] as const).map((type, i) => {
               const count =
-                type === 'friends' ? user.friends_count : type === 'followers' ? user.followers_count : user.following_count;
+                type === 'friends' ? user.friends_count :
+                type === 'followers' ? user.followers_count :
+                user.following_count;
               return (
                 <React.Fragment key={type}>
                   {i > 0 && <View style={styles.followDivider} />}
@@ -264,12 +251,12 @@ export default function ProfileScreen({ navigation }: any) {
 
           {/* Stats */}
           <View style={styles.statsRow}>
-            <StatCard value={user.movies_watched}   label="Movies"   />
-            <StatCard value={user.series_watched}   label="Series"   />
+            <StatCard value={user.movies_watched} label="Movies" />
+            <StatCard value={user.series_watched} label="Series" />
             <StatCard value={user.episodes_watched} label="Episodes" />
           </View>
 
-          {/* таби */}
+          {/* Tabs */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -312,11 +299,15 @@ export default function ProfileScreen({ navigation }: any) {
             </TouchableOpacity>
           </ScrollView>
 
-          {/* Рядок керування кастомним списком */}
+          {/* Custom list controls */}
           {activeCustomList && (
             <View style={styles.listControlRow}>
               <TouchableOpacity
-                onPress={() => handleTogglePrivacy(activeCustomList)}
+                onPress={() => setPrivacyAlert({
+                  visible: true,
+                  list: activeCustomList,
+                  newPrivacy: !activeCustomList.is_private,
+                })}
                 activeOpacity={0.7}
                 style={styles.privacyToggle}
               >
@@ -326,7 +317,7 @@ export default function ProfileScreen({ navigation }: any) {
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={() => handleDeleteList(activeCustomList)}
+                onPress={() => setDeleteAlert({ visible: true, list: activeCustomList })}
                 activeOpacity={0.7}
                 style={styles.deleteBtn}
               >
@@ -335,14 +326,14 @@ export default function ProfileScreen({ navigation }: any) {
             </View>
           )}
 
-          {/* grid */}
+          {/* Grid placeholder */}
           <View style={styles.grid}>
             {[0, 1, 2, 3, 4, 5].map(i => <EmptyGridItem key={i} />)}
           </View>
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>
-              {activeTab === 'watched' ? 'No movies watched yet'   :
-               activeTab === 'favorites' ? 'No favorites yet'        :
+              {activeTab === 'watched' ? 'No movies watched yet' :
+               activeTab === 'favorites' ? 'No favorites yet' :
                activeTab === 'watchlist' ? 'Your watchlist is empty' :
                'This list is empty'}
             </Text>
@@ -352,45 +343,41 @@ export default function ProfileScreen({ navigation }: any) {
         </View>
       </ScrollView>
 
-      {/* custom delete Alert */}
-      <CustomAlert
-        visible={deleteAlert.visible}
-        title="Delete list?"
-        message={`Are you sure you want to delete "${deleteAlert.list?.name}"?`}
-        onConfirm={confirmDelete}
-        onCancel={() => setDeleteAlert({ visible: false, list: null })}
-        confirmText="Delete"
-        cancelText="Cancel"
-        confirmStyle="danger"
-      />
+      {/* Delete Alert */}
+      {deleteAlert.visible && deleteAlert.list && (
+        <CustomAlert
+          visible={deleteAlert.visible}
+          title="Delete list?"
+          message={`Are you sure you want to delete "${deleteAlert.list.name}"?`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteAlert({ visible: false, list: null })}
+          confirmText="Delete"
+          cancelText="Cancel"
+          confirmStyle="danger"
+        />
+      )}
 
-      {/* privacy toggle confirmation alert */}
-      <CustomAlert
-        visible={privacyAlert.visible}
-        title={privacyAlert.newPrivacy ? "Make private?" : "Make public?"}
-        message={`Are you sure you want to make "${privacyAlert.list?.name}" ${privacyAlert.newPrivacy ? 'private' : 'public'}?`}
-        onConfirm={confirmTogglePrivacy}
-        onCancel={() => setPrivacyAlert({ visible: false, list: null, newPrivacy: false })}
-        confirmText={privacyAlert.newPrivacy ? "Make Private" : "Make Public"}
-        cancelText="Cancel"
-        confirmStyle="normal"
-      />
+      {/* Privacy Alert */}
+      {privacyAlert.visible && privacyAlert.list && (
+        <CustomAlert
+          visible={privacyAlert.visible}
+          title={privacyAlert.newPrivacy ? 'Make private?' : 'Make public?'}
+          message={`Are you sure you want to make "${privacyAlert.list.name}" ${privacyAlert.newPrivacy ? 'private' : 'public'}?`}
+          onConfirm={confirmTogglePrivacy}
+          onCancel={() => setPrivacyAlert({ visible: false, list: null, newPrivacy: false })}
+          confirmText={privacyAlert.newPrivacy ? 'Make Private' : 'Make Public'}
+          cancelText="Cancel"
+          confirmStyle="normal"
+        />
+      )}
 
-      {/* create list modal */}
-      <Modal
-        visible={showCreateList}
-        transparent
-        animationType="fade"
-        onRequestClose={() => { setShowCreateList(false); setNewListName(''); setNewListPrivate(false); }}
-      >
-        <Pressable
-          style={styles.createOverlay}
-          onPress={() => { setShowCreateList(false); setNewListName(''); setNewListPrivate(false); }}
-        >
+      {/* Create List Modal */}
+      <Modal visible={showCreateList} transparent animationType="fade" onRequestClose={closeCreateList}>
+        <Pressable style={styles.createOverlay} onPress={closeCreateList}>
           <Pressable style={styles.createCard} onPress={() => {}}>
             <View style={styles.createHeader}>
               <Text style={styles.createTitle}>Create new list</Text>
-              <TouchableOpacity onPress={() => { setShowCreateList(false); setNewListName(''); setNewListPrivate(false); }} activeOpacity={0.7}>
+              <TouchableOpacity onPress={closeCreateList} activeOpacity={0.7}>
                 <Text style={styles.createCloseBtn}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -421,7 +408,7 @@ export default function ProfileScreen({ navigation }: any) {
                   value={newListPrivate}
                   onValueChange={setNewListPrivate}
                   trackColor={{ false: '#2a2a2a', true: COLORS.gold }}
-                  thumbColor={newListPrivate ? COLORS.background : '#555'}
+                  thumbColor={newListPrivate ? COLORS.background : COLORS.cardTextLight}
                 />
               </View>
 
@@ -441,13 +428,8 @@ export default function ProfileScreen({ navigation }: any) {
         </Pressable>
       </Modal>
 
-      {/* Friends modal */}
-      <Modal
-        visible={showFriendsModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowFriendsModal(false)}
-      >
+      {/* Friends Modal */}
+      <Modal visible={showFriendsModal} transparent animationType="fade" onRequestClose={() => setShowFriendsModal(false)}>
         <Pressable style={styles.friendsOverlay} onPress={() => setShowFriendsModal(false)}>
           <Pressable style={styles.friendsCard} onPress={() => {}}>
             <View style={styles.friendsHeader}>
@@ -461,7 +443,9 @@ export default function ProfileScreen({ navigation }: any) {
             <View style={styles.friendsBody}>
               <Text style={styles.emptyFriendsIcon}>👥</Text>
               <Text style={styles.emptyFriendsText}>
-                {friendsType === 'friends' ? 'No friends yet' : friendsType === 'followers' ? 'No followers yet' : 'Not following anyone yet'}
+                {friendsType === 'friends' ? 'No friends yet' :
+                 friendsType === 'followers' ? 'No followers yet' :
+                 'Not following anyone yet'}
               </Text>
               <Text style={styles.emptyFriendsCount}>{friendsCount} {friendsType}</Text>
             </View>
@@ -481,41 +465,43 @@ const styles = StyleSheet.create({
   inner: { width: '100%', maxWidth: MAX_WIDTH },
 
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'ios' ? 56 : 36,
     paddingBottom: 12,
   },
-  settingsIcon: { fontSize: 20, color: '#555555' },
+  settingsIcon: { fontSize: 20, color: COLORS.cardTextLight },
 
   heroSection: { alignItems: 'center', paddingHorizontal: 20 },
   avatarWrapper: { borderWidth: 2.5, borderColor: COLORS.gold, overflow: 'hidden', marginBottom: 12 },
-  avatarPlaceholder: { backgroundColor: '#1a1a1a', alignItems: 'center', justifyContent: 'center' },
+  avatarImage: { width: '100%', height: '100%', borderRadius: 999 },
+  avatarPlaceholder: { backgroundColor: COLORS.cardDark, alignItems: 'center', justifyContent: 'center' },
   silhouetteHead: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#333', marginBottom: 2, marginTop: -8 },
   silhouetteBody: { width: 44, height: 24, borderRadius: 22, backgroundColor: '#333' },
-  username: { fontFamily: FONTS.semiBold, fontSize: 18, color: COLORS.pink,  marginBottom: 2 },
-  fullName: { fontFamily: FONTS.regular,  fontSize: 13, color: '#666666',    marginBottom: 4 },
-  memberSince: { fontFamily: FONTS.regular,  fontSize: 12, color: '#444444',    marginBottom: 14 },
+  username: { fontFamily: FONTS.semiBold, fontSize: 18, color: COLORS.pink, marginBottom: 2 },
+  fullName: { fontFamily: FONTS.regular, fontSize: 13, color: '#666666', marginBottom: 4 },
+  memberSince: { fontFamily: FONTS.regular, fontSize: 12, color: COLORS.darkGray, marginBottom: 14 },
   socialsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
 
-  followRow: { flexDirection: 'row', borderTopWidth: 0.5, borderBottomWidth: 0.5, borderColor: '#1a1a1a', marginBottom: 16 },
+  followRow: { flexDirection: 'row', borderTopWidth: 0.5, borderBottomWidth: 0.5, borderColor: COLORS.cardDark, marginBottom: 16 },
   followCell: { flex: 1, paddingVertical: 12, alignItems: 'center' },
-  followDivider: { width: 0.5, backgroundColor: '#1a1a1a' },
+  followDivider: { width: 0.5, backgroundColor: COLORS.cardDark },
   followNum: { fontFamily: FONTS.semiBold, fontSize: 17, color: COLORS.gold },
-  followLabel: { fontFamily: FONTS.regular,  fontSize: 11, color: '#555555', marginTop: 2 },
+  followLabel: { fontFamily: FONTS.regular, fontSize: 11, color: COLORS.cardTextLight, marginTop: 2 },
 
   statsRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, marginBottom: 20 },
 
   tabsScroll: { marginBottom: 0 },
-  tabsContainer: { paddingHorizontal: 20, gap: 4, borderBottomWidth: 0.5, borderBottomColor: '#1a1a1a' },
+  tabsContainer: { paddingHorizontal: 20, gap: 4, borderBottomWidth: 0.5, borderBottomColor: COLORS.cardDark },
   tab: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabActive: { borderBottomColor: COLORS.gold },
   tabAdd: { marginLeft: 4 },
-  tabLabel: { fontFamily: FONTS.medium, fontSize: 13, color: '#555555' },
+  tabLabel: { fontFamily: FONTS.medium, fontSize: 13, color: COLORS.cardTextLight },
   tabLabelActive: { color: COLORS.gold },
   tabLabelAdd: { fontFamily: FONTS.medium, fontSize: 13, color: COLORS.pink },
 
-  // тут керування кастомним списком
   listControlRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -524,23 +510,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#1a1a1a',
+    borderBottomColor: COLORS.cardDark,
   },
-  privacyToggle: {
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 0.5,
-    borderColor: '#333',
-  },
+  privacyToggle: { paddingVertical: 5, paddingHorizontal: 12, borderRadius: 12, borderWidth: 0.5, borderColor: '#333' },
   privacyToggleText: { fontFamily: FONTS.regular, fontSize: 12, color: '#888888' },
-  deleteBtn: {
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 0.5,
-    borderColor: 'rgba(255,77,77,0.3)',
-  },
+  deleteBtn: { paddingVertical: 5, paddingHorizontal: 12, borderRadius: 12, borderWidth: 0.5, borderColor: 'rgba(255,77,77,0.3)' },
   deleteBtnText: { fontFamily: FONTS.regular, fontSize: 12, color: COLORS.error },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 2, paddingTop: 2 },
@@ -548,12 +522,18 @@ const styles = StyleSheet.create({
   gridCellInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   filmIcon: { alignItems: 'center', opacity: 0.12 },
   filmRect: { width: 22, height: 16, borderRadius: 2, borderWidth: 1, borderColor: '#fff' },
-  filmPlay: { width: 0, height: 0, borderLeftWidth: 7, borderTopWidth: 5, borderBottomWidth: 5, borderLeftColor: '#fff', borderTopColor: COLORS.transparent , borderBottomColor: COLORS.transparent , marginTop: -11, marginLeft: 2 },
+  filmPlay: {
+    width: 0, height: 0,
+    borderLeftWidth: 7, borderTopWidth: 5, borderBottomWidth: 5,
+    borderLeftColor: '#fff',
+    borderTopColor: COLORS.transparent,
+    borderBottomColor: COLORS.transparent,
+    marginTop: -11, marginLeft: 2,
+  },
 
   emptyState: { paddingVertical: 24, alignItems: 'center' },
   emptyText: { fontFamily: FONTS.regular, fontSize: 13, color: '#2a2a2a' },
 
-  // створення ліст модал 
   createOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.75)',
@@ -562,7 +542,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   createCard: {
-    backgroundColor: '#111111',
+    backgroundColor: COLORS.cardBg,
     borderRadius: 20,
     borderWidth: 0.5,
     borderColor: '#222',
@@ -577,22 +557,11 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 12,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#1a1a1a',
+    borderBottomColor: COLORS.cardDark,
   },
-  createTitle: {
-    fontFamily: FONTS.semiBold,
-    fontSize: 18,
-    color: COLORS.white,
-  },
-  createCloseBtn: {
-    fontSize: 18,
-    color: '#555555',
-    paddingHorizontal: 4,
-  },
-  createBody: {
-    padding: 20,
-    gap: 16,
-  },
+  createTitle: { fontFamily: FONTS.semiBold, fontSize: 18, color: COLORS.white },
+  createCloseBtn: { fontSize: 18, color: COLORS.cardTextLight, paddingHorizontal: 4 },
+  createBody: { padding: 20, gap: 16 },
   createInput: {
     backgroundColor: 'transparent',
     borderWidth: 2,
@@ -603,43 +572,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: FONTS.regular,
   },
-  createPrivacyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  createPrivacyLabel: {
-    fontFamily: FONTS.medium,
-    fontSize: 14,
-    color: COLORS.white,
-    marginBottom: 2,
-  },
-  createPrivacyHint: {
-    fontFamily: FONTS.regular,
-    fontSize: 12,
-    color: '#555555',
-  },
-  createBtn: {
-    backgroundColor: COLORS.gold,
-    borderRadius: 50,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  createBtnDisabled: {
-    opacity: 0.4,
-  },
-  createBtnText: {
-    fontFamily: FONTS.semiBold,
-    fontSize: 16,
-    color: COLORS.background,
-  },
+  createPrivacyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 },
+  createPrivacyLabel: { fontFamily: FONTS.medium, fontSize: 14, color: COLORS.white, marginBottom: 2 },
+  createPrivacyHint: { fontFamily: FONTS.regular, fontSize: 12, color: COLORS.cardTextLight },
+  createBtn: { backgroundColor: COLORS.gold, borderRadius: 50, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
+  createBtnDisabled: { opacity: 0.4 },
+  createBtnText: { fontFamily: FONTS.semiBold, fontSize: 16, color: COLORS.background },
 
-  // френдс модал
-  friendsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  friendsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
   friendsCard: {
-    backgroundColor: '#111111',
+    backgroundColor: COLORS.cardBg,
     borderRadius: 20,
     borderWidth: 0.5,
     borderColor: '#222',
@@ -654,36 +602,12 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 12,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#1a1a1a',
+    borderBottomColor: COLORS.cardDark,
   },
-  friendsTitle: {
-    fontFamily: FONTS.semiBold,
-    fontSize: 18,
-    color: COLORS.white,
-  },
-  friendsCloseBtn: {
-    fontSize: 18,
-    color: '#555555',
-    paddingHorizontal: 4,
-  },
-  friendsBody: {
-    alignItems: 'center',
-    paddingVertical: 36,
-    paddingHorizontal: 24,
-  },
-  emptyFriendsIcon: {
-    fontSize: 36,
-    marginBottom: 12,
-  },
-  emptyFriendsText: {
-    fontFamily: FONTS.regular,
-    fontSize: 14,
-    color: '#555555',
-    marginBottom: 6,
-  },
-  emptyFriendsCount: {
-    fontFamily: FONTS.semiBold,
-    fontSize: 13,
-    color: '#333333',
-  },
+  friendsTitle: { fontFamily: FONTS.semiBold, fontSize: 18, color: COLORS.white },
+  friendsCloseBtn: { fontSize: 18, color: COLORS.cardTextLight, paddingHorizontal: 4 },
+  friendsBody: { alignItems: 'center', paddingVertical: 36, paddingHorizontal: 24 },
+  emptyFriendsIcon: { fontSize: 36, marginBottom: 12 },
+  emptyFriendsText: { fontFamily: FONTS.regular, fontSize: 14, color: COLORS.cardTextLight, marginBottom: 6 },
+  emptyFriendsCount: { fontFamily: FONTS.semiBold, fontSize: 13, color: '#333333' },
 });

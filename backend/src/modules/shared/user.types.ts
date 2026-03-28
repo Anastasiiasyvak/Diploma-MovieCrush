@@ -23,26 +23,6 @@ export interface User {
   created_at: Date;
 }
 
-export interface RegisterInput {
-  email: string;
-  password: string;
-  username: string;
-  first_name?: string;
-  last_name?: string;
-  language?: string;
-}
-
-export interface LoginInput {
-  email: string;
-  password: string;
-}
-
-export interface AuthResponse {
-  user: Omit<User, 'password_hash'>;
-  accessToken: string;
-  refreshToken: string;
-}
-
 export interface UserList {
   id: number;
   user_id: number;
@@ -50,17 +30,4 @@ export interface UserList {
   name: string;
   is_private: boolean;
   created_at: Date;
-}
-
-export interface ProfileResponse {
-  user: Omit<User, 'password_hash'>;
-  lists: UserList[];
-}
-
-export interface UpdateProfileInput {
-  first_name?: string;
-  last_name?: string;
-  instagram_username?: string;
-  telegram_username?: string;
-  profile_image_url?: string;
 }

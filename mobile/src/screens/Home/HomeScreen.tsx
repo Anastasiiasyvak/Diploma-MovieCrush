@@ -1,100 +1,101 @@
-import React from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
-import { TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView,
+  ActivityIndicator
+} from 'react-native';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/fonts';
-import { Logo } from '../../components/ui/Logo';
-import { clearTokens } from '../../services/storage';
+import { Header } from '../../components/ui/Header';
+import { Footer } from '../../components/ui/Footer';
+import { Section } from '../../components/MediaRow';
+import { tmdbService, Movie, TVSeries } from '../../services/tmdbService';
 
 export default function HomeScreen({ navigation }: any) {
-  const handleLogout = async () => {
-    await clearTokens();
-    navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
+  const [trendingMovies, setTrendingMovies] = useState<Movie[]>([]);
+  const [trendingSeries, setTrendingSeries] = useState<TVSeries[]>([]);
+  const [topRatedMovies, setTopRatedMovies] = useState<Movie[]>([]);
+  const [upcomingMovies, setUpcomingMovies] = useState<Movie[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'home' | 'recommendations' | 'challenges'>('home');
+
+  useEffect(() => {
+    const fetchAll = async () => {
+      try {
+        const [moviesRes, seriesRes, topRes, upcomingRes] = await Promise.all([
+          tmdbService.getTrendingMovies('week'),
+          tmdbService.getTrendingSeries('week'),
+          tmdbService.getTopRatedMovies(),
+          tmdbService.getUpcomingMovies(),
+        ]);
+        setTrendingMovies(moviesRes.results);
+        setTrendingSeries(seriesRes.results);
+        setTopRatedMovies(topRes.results);
+        setUpcomingMovies(upcomingRes.results);
+      } catch (err) {
+        setError('Could not load movies. Check your connection.');
+        console.error('TMDB error:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchAll();
+  }, []);
+
+  const handleTabPress = (tab: 'home' | 'recommendations' | 'challenges') => {
+    setActiveTab(tab);
+    if (tab === 'recommendations') {
+      navigation.navigate('Recommendations');
+    } else if (tab === 'challenges') {
+      navigation.navigate('Challenges');
+    }
+  };
+
+  const handleItemPress = (item: Movie | TVSeries) => {
+    console.log('Item pressed:', 'title' in item ? item.title : item.name);
   };
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Logo />
-        <TouchableOpacity
-          style={styles.profileBtn}
-          onPress={() => navigation.navigate('Profile')}
-          activeOpacity={0.7}
-        >
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarIcon}>👤</Text>
+      <View style={styles.centered}>
+
+        <Header onProfilePress={() => navigation.navigate('Profile')} />
+
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.gold} />
           </View>
-        </TouchableOpacity>
-      </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : (
+          <ScrollView 
+            showsVerticalScrollIndicator={false} 
+            contentContainerStyle={styles.scrollContent}
+          >
+            <Section title="🎬 Trending Movies this week" data={trendingMovies} type="movie" onItemPress={handleItemPress} />
+            <Section title="📺 Trending Series this week" data={trendingSeries} type="tv" onItemPress={handleItemPress} />
+            <Section title="🍿 Upcoming" data={upcomingMovies} type="movie" onItemPress={handleItemPress} />
+            <Section title="⭐ Top Rated all time" data={topRatedMovies} type="movie" onItemPress={handleItemPress} />
+            <View style={{ height: 8 }} />
+          </ScrollView>
+        )}
 
-      <View style={styles.body}>
-        <Text style={styles.comingSoon}>🎬</Text>
-        <Text style={styles.comingSoonText}>Movies coming soon...</Text>
+        <Footer activeTab={activeTab} onTabPress={handleTabPress} />
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
-          <Text style={styles.logoutText}>Log out</Text>
-        </TouchableOpacity>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 56 : 36,
-    paddingBottom: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#1a1a1a',
-  },
-  profileBtn: {
-    padding: 4,
-  },
-  avatarCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#1a1a1a',
-    borderWidth: 1.5,
-    borderColor: COLORS.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarIcon: {
-    fontSize: 16,
-  },
-  body: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  comingSoon: {
-    fontSize: 64,
-  },
-  comingSoonText: {
-    fontFamily: FONTS.regular,
-    fontSize: 16,
-    color: '#444',
-    marginBottom: 32,
-  },
-  logoutBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 24,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  logoutText: {
-    fontFamily: FONTS.regular,
-    fontSize: 13,
-    color: '#555',
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  centered: { flex: 1, width: '100%', maxWidth: 480, alignSelf: 'center' },
+
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  errorContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  errorText: { fontFamily: FONTS.regular, fontSize: 14, color: COLORS.cardTextLight, textAlign: 'center' },
+
+  scrollContent: { paddingBottom: 20 },
 });

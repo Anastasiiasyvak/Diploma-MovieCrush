@@ -10,6 +10,8 @@ export interface UserProfile {
   profile_image_url?: string;
   instagram_username?: string;
   telegram_username?: string;
+  soulmate_consent: boolean;
+  language: string;
   friends_count: number;
   followers_count: number;
   following_count: number;
@@ -52,16 +54,16 @@ export const profileService = {
   },
 
   createCustomList: async (name: string, isPrivate: boolean): Promise<{ list: UserList }> => {
-    const response = await api.post('/profile/lists', { name, is_private: isPrivate });
+    const response = await api.post('/lists', { name, is_private: isPrivate });
     return response.data;
   },
 
   deleteCustomList: async (listId: number): Promise<void> => {
-    await api.delete(`/profile/lists/${listId}`);
+    await api.delete(`/lists/${listId}`);
   },
 
   toggleListPrivacy: async (listId: number, isPrivate: boolean): Promise<{ list: UserList }> => {
-    const response = await api.patch(`/profile/lists/${listId}`, { is_private: isPrivate });
+    const response = await api.patch(`/lists/${listId}`, { is_private: isPrivate });
     return response.data;
   },
 };

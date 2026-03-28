@@ -15,10 +15,11 @@ interface CustomAlertProps {
   title: string;
   message: string;
   onConfirm: () => void;
-  onCancel: () => void;
+  onCancel?: () => void;
   confirmText?: string;
   cancelText?: string;
   confirmStyle?: 'danger' | 'normal';
+  hideCancel?: boolean;
 }
 
 export const CustomAlert: React.FC<CustomAlertProps> = ({
@@ -27,16 +28,17 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
   message,
   onConfirm,
   onCancel,
-  confirmText = 'Delete',
+  confirmText = 'OK',
   cancelText = 'Cancel',
-  confirmStyle = 'danger',
+  confirmStyle = 'normal',
+  hideCancel = false,
 }) => {
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
-      onRequestClose={onCancel}
+      animationType="none"
+      onRequestClose={onCancel || onConfirm}
     >
       <View style={styles.overlay}>
         <View style={styles.alertBox}>
@@ -44,19 +46,22 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
           <Text style={styles.message}>{message}</Text>
           
           <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={[styles.button, styles.cancelButton]}
-              onPress={onCancel}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.cancelButtonText}>{cancelText}</Text>
-            </TouchableOpacity>
+            {!hideCancel && onCancel && (
+              <TouchableOpacity
+                style={[styles.button, styles.cancelButton]}
+                onPress={onCancel}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cancelButtonText}>{cancelText}</Text>
+              </TouchableOpacity>
+            )}
             
             <TouchableOpacity
               style={[
                 styles.button,
                 styles.confirmButton,
                 confirmStyle === 'danger' && styles.dangerButton,
+                hideCancel && !onCancel ? styles.fullWidthButton : null,
               ]}
               onPress={onConfirm}
               activeOpacity={0.7}
@@ -128,15 +133,18 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     alignItems: 'center',
   },
+  fullWidthButton: {
+    flex: 1,
+  },
   cancelButton: {
-    backgroundColor: COLORS.transparent,
+    backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: '#333333',
   },
   cancelButtonText: {
     fontFamily: FONTS.medium,
     fontSize: 14,
-    color: COLORS.gray,
+    color: '#888888',
   },
   confirmButton: {
     backgroundColor: COLORS.gold,

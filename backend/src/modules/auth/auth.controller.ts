@@ -1,14 +1,16 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import {
-  registerUser, loginUser, getUserById,
-  verifyEmail, checkEmailVerified,
-  requestPasswordReset, resetPassword,
-} from './user.service';
-import { RegisterInput, LoginInput } from './user.types';
+  registerUser,
+  loginUser,
+  verifyEmail,
+  checkEmailVerified,
+  requestPasswordReset,
+  resetPassword,
+} from './auth.service';
+import { getUserById } from '../shared/user.queries';
+import { RegisterInput, LoginInput } from './auth.types';
 import { AuthRequest } from '../../middleware/auth.middleware';
-
-//  Validation helpers 
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_REGEX = /^[a-zA-Z0-9._]+$/;
@@ -38,7 +40,6 @@ const validateUsername = (username: string): string | null => {
   return null;
 };
 
-// Token generator 
 const generateTokens = (userId: number, uuid: string) => {
   const accessToken = jwt.sign(
     { userId, uuid },
@@ -53,51 +54,63 @@ const generateTokens = (userId: number, uuid: string) => {
   return { accessToken, refreshToken };
 };
 
-// HTML pages
+const verifySuccessPage = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MovieCrush — Email Verified</title>
+  </head>
+  <body style="margin:0;padding:0;background:#000;font-family:Arial,sans-serif;">
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 20px;">
+      <div style="background:#111;border-radius:16px;border:1px solid #222;padding:48px 40px;max-width:480px;width:100%;text-align:center;">
+        <h1 style="margin:0 0 8px;font-size:28px;font-weight:700;color:#ffafcc;">MovieCrush</h1>
+        <div style="font-size:48px;margin:24px 0;">🎬</div>
+        <h2 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#00cc66;">Email verified!</h2>
+        <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.6);line-height:1.6;">Your account is now active.<br/>You can close this tab and return to the app.</p>
+      </div>
+    </div>
+  </body>
+</html>`;
 
-const verifySuccessPage = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>MovieCrush</title></head>
-<body style="margin:0;padding:0;background:#000;font-family:Arial,sans-serif;">
-<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 20px;">
-<div style="background:#111;border-radius:16px;border:1px solid #222;padding:48px 40px;max-width:480px;width:100%;text-align:center;">
-<h1 style="margin:0 0 8px;font-size:28px;font-weight:700;color:#ffafcc;">MovieCrush</h1>
-<div style="font-size:48px;margin:24px 0;">🎬</div>
-<h2 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#00cc66;">Email verified!</h2>
-<p style="margin:0;font-size:15px;color:rgba(255,255,255,0.6);line-height:1.6;">Your account is now active.<br/>You can close this tab and return to the app.</p>
-</div></div></body></html>`;
+const verifyErrorPage = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MovieCrush — Verification Failed</title>
+  </head>
+  <body style="margin:0;padding:0;background:#000;font-family:Arial,sans-serif;">
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 20px;">
+      <div style="background:#111;border-radius:16px;border:1px solid #222;padding:48px 40px;max-width:480px;width:100%;text-align:center;">
+        <h1 style="margin:0 0 8px;font-size:28px;font-weight:700;color:#ffafcc;">MovieCrush</h1>
+        <div style="font-size:48px;margin:24px 0;">❌</div>
+        <h2 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#ff4d4d;">Invalid or expired link</h2>
+        <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.6);line-height:1.6;">This link is invalid or has already been used.<br/>Please try again.</p>
+      </div>
+    </div>
+  </body>
+</html>`;
 
-const verifyErrorPage = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>MovieCrush</title></head>
-<body style="margin:0;padding:0;background:#000;font-family:Arial,sans-serif;">
-<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 20px;">
-<div style="background:#111;border-radius:16px;border:1px solid #222;padding:48px 40px;max-width:480px;width:100%;text-align:center;">
-<h1 style="margin:0 0 8px;font-size:28px;font-weight:700;color:#ffafcc;">MovieCrush</h1>
-<div style="font-size:48px;margin:24px 0;">❌</div>
-<h2 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#ff4d4d;">Invalid or expired link</h2>
-<p style="margin:0;font-size:15px;color:rgba(255,255,255,0.6);line-height:1.6;">This link is invalid or has already been used.<br/>Please try again.</p>
-</div></div></body></html>`;
-
-// Reset password form
 const resetPasswordForm = (token: string, errorMessage?: string) => `<!DOCTYPE html>
 <html>
   <head>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MovieCrush — Reset Password</title>
   </head>
   <body style="margin:0;padding:0;background:#000;font-family:Arial,sans-serif;">
     <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 20px;">
       <div style="background:#111;border-radius:16px;border:1px solid #222;padding:48px 40px;max-width:480px;width:100%;">
-
         <h1 style="margin:0 0 8px;font-size:28px;font-weight:700;color:#ffafcc;text-align:center;">MovieCrush</h1>
         <h2 style="margin:24px 0 8px;font-size:20px;font-weight:700;color:#fff;text-align:center;">Create new password</h2>
         <p style="margin:0 0 ${errorMessage ? '16px' : '28px'};font-size:14px;color:rgba(255,255,255,0.5);text-align:center;">
           Min 8 characters, one uppercase, one number
         </p>
-
         ${errorMessage ? `
         <div style="background:rgba(255,77,77,0.12);border:1px solid rgba(255,77,77,0.4);border-radius:12px;padding:12px 16px;margin-bottom:20px;text-align:center;">
           <p style="margin:0;color:#ff4d4d;font-size:14px;">⚠ ${errorMessage}</p>
         </div>` : ''}
-
         <form method="POST" action="/api/auth/reset-password/${token}">
           <input type="password" name="password" placeholder="New password" required minlength="8"
             style="width:100%;box-sizing:border-box;background:transparent;border:2px solid #ffd700;border-radius:12px;padding:14px;color:#fff;font-size:16px;margin-bottom:12px;outline:none;"/>
@@ -108,23 +121,30 @@ const resetPasswordForm = (token: string, errorMessage?: string) => `<!DOCTYPE h
             Reset Password
           </button>
         </form>
-
       </div>
     </div>
   </body>
 </html>`;
 
-const resetSuccessPage = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>MovieCrush</title></head>
-<body style="margin:0;padding:0;background:#000;font-family:Arial,sans-serif;">
-<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 20px;">
-<div style="background:#111;border-radius:16px;border:1px solid #222;padding:48px 40px;max-width:480px;width:100%;text-align:center;">
-<h1 style="margin:0 0 8px;font-size:28px;font-weight:700;color:#ffafcc;">MovieCrush</h1>
-<div style="font-size:48px;margin:24px 0;">✅</div>
-<h2 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#00cc66;">Password updated!</h2>
-<p style="margin:0;font-size:15px;color:rgba(255,255,255,0.6);line-height:1.6;">Your password has been changed.<br/>You can close this tab and log in to the app.</p>
-</div></div></body></html>`;
+const resetSuccessPage = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MovieCrush — Password Updated</title>
+  </head>
+  <body style="margin:0;padding:0;background:#000;font-family:Arial,sans-serif;">
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 20px;">
+      <div style="background:#111;border-radius:16px;border:1px solid #222;padding:48px 40px;max-width:480px;width:100%;text-align:center;">
+        <h1 style="margin:0 0 8px;font-size:28px;font-weight:700;color:#ffafcc;">MovieCrush</h1>
+        <div style="font-size:48px;margin:24px 0;">✅</div>
+        <h2 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#00cc66;">Password updated!</h2>
+        <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.6);line-height:1.6;">Your password has been changed.<br/>You can close this tab and log in to the app.</p>
+      </div>
+    </div>
+  </body>
+</html>`;
 
-// Controllers
 
 export const register = async (req: Request, res: Response) => {
   try {
@@ -139,10 +159,10 @@ export const register = async (req: Request, res: Response) => {
     const passwordError = validatePassword(input.password);
     if (passwordError) { res.status(400).json({ error: passwordError, field: 'password' }); return; }
 
-    input.email    = input.email.trim().toLowerCase();
+    input.email = input.email.trim().toLowerCase();
     input.username = input.username.trim();
     if (input.first_name) input.first_name = input.first_name.trim();
-    if (input.last_name)  input.last_name  = input.last_name.trim();
+    if (input.last_name) input.last_name = input.last_name.trim();
 
     await registerUser(input);
 
@@ -214,7 +234,6 @@ export const forgotPassword = async (req: Request, res: Response) => {
   }
 };
 
-// GET - show reset form in browser
 export const resetPasswordForm_handler = async (req: Request, res: Response) => {
   try {
     const token = req.params.token as string;
@@ -225,7 +244,6 @@ export const resetPasswordForm_handler = async (req: Request, res: Response) => 
   }
 };
 
-// POST - handle form submission
 export const resetPasswordHandler = async (req: Request, res: Response) => {
   try {
     const token = req.params.token as string;

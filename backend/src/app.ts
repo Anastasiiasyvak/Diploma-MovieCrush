@@ -2,8 +2,11 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import userRoutes from './modules/user/user.routes';
-import profileRoutes from './modules/user/profile.routes';
+
+import authRoutes from './modules/auth/auth.routes';
+import profileRoutes from './modules/profile/profile.routes';
+import listsRoutes from './modules/lists/lists.routes';
+import settingsRoutes from './modules/settings/settings.routes';
 
 const app = express();
 
@@ -24,7 +27,9 @@ app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', message: 'MovieCrush API is running' });
 });
 
-app.use('/api/auth', userRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api', listsRoutes);       
+app.use('/api/settings', settingsRoutes);
 
 export default app;
