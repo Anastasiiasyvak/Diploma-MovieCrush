@@ -7,9 +7,9 @@ import { FONTS } from '../../constants/fonts';
 const MAX_WIDTH = 480;
 
 const TABS = [
-  { key: 'home', icon: '🎬', label: 'Discover' },
-  { key: 'recommendations', icon: '🤖', label: 'For You' },
-  { key: 'challenges', icon: '🏆', label: 'Challenges' },
+  { key: 'home',            icon: '🎬', label: 'Discover' },
+  { key: 'recommendations', icon: '✨', label: 'For You' },
+  { key: 'challenges',      icon: '🏆', label: 'Challenges' },
 ] as const;
 
 type TabKey = typeof TABS[number]['key'];
@@ -27,9 +27,9 @@ export const Footer: React.FC<FooterProps> = ({ activeTab, onTabPress }) => {
       <View style={styles.footerCentered}>
         <View style={[styles.footer, { paddingBottom: Platform.OS === 'ios' ? insets.bottom : 10 }]}>
           {TABS.map(tab => (
-            <TouchableOpacity 
+            <TouchableOpacity
               key={tab.key}
-              style={styles.tab} 
+              style={styles.tab}
               onPress={() => onTabPress(tab.key)}
               activeOpacity={0.7}
             >
