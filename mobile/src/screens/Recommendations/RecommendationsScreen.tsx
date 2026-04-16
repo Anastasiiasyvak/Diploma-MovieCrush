@@ -195,6 +195,13 @@ export default function RecommendationsScreen({ navigation }: any) {
                 index={index}
                 cardWidth={CARD_W}
                 cardHeight={CARD_H}
+                onPress={() => {
+                  if (item.mediaType === 'movie') {
+                    navigation.navigate('Movie', {movieId: item.id});
+                  } else {
+                    navigation.navigate('Series', {seriesId: item.id});
+                  }
+                }}
               />
             )}
             ListHeaderComponent={ListHeader}

@@ -15,6 +15,7 @@ import { CustomAlert } from '../../components/ui/CustomAlert';
 import { profileService, ProfileData, UserList } from '../../services/profileService';
 import { clearTokens } from '../../services/storage';
 import { Ionicons } from '@expo/vector-icons';
+import { ProfileListGrid } from '../../components/profile/ProfileListGrid';
 
 const { width } = Dimensions.get('window');
 const MAX_WIDTH = 480;
@@ -44,17 +45,6 @@ const Avatar: React.FC<{ imageUrl?: string; size?: number }> = ({ imageUrl, size
   </View>
 );
 
-
-const EmptyGridItem: React.FC = () => (
-  <View style={[styles.gridCell, { width: GRID_ITEM_SIZE, height: GRID_ITEM_SIZE }]}>
-    <View style={styles.gridCellInner}>
-      <View style={styles.filmIcon}>
-        <View style={styles.filmRect} />
-        <View style={styles.filmPlay} />
-      </View>
-    </View>
-  </View>
-);
 
 export default function ProfileScreen({ navigation }: any) {
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
@@ -182,6 +172,36 @@ export default function ProfileScreen({ navigation }: any) {
     { key: 'favorites', label: 'Favorites' },
     { key: 'watchlist', label: 'Watchlist' },
   ];
+
+  const getActiveListId = (): number | null => {
+    const defaultList = lists.find(l =>
+      (activeTab === 'watched'   && l.list_type === 'watched')   ||
+      (activeTab === 'favorites' && l.list_type === 'favorites') ||
+      (activeTab === 'watchlist' && l.list_type === 'watchlist')
+    );
+    if (defaultList) return defaultList.id;
+    const customList = customLists.find(l => l.id.toString() === activeTab);
+    return customList?.id ?? null;
+  };
+ 
+  const getActiveListType = (): string => {
+    if (activeTab === 'watched')   return 'watched';
+    if (activeTab === 'favorites') return 'favorites';
+    if (activeTab === 'watchlist') return 'watchlist';
+    return 'custom';
+  };
+
+  const handleMovieRemoved = (tmdbId: number, listType: string) => {
+    if (listType === 'watched') {
+      setProfileData(prev => prev ? {
+        ...prev,
+        user: {
+          ...prev.user,
+          movies_watched: Math.max(0, prev.user.movies_watched - 1),
+        },
+      } : prev);
+    }
+  };
 
   const friendsCount =
     friendsType === 'friends' ? user.friends_count :
@@ -326,18 +346,18 @@ export default function ProfileScreen({ navigation }: any) {
             </View>
           )}
 
-          {/* Grid placeholder */}
-          <View style={styles.grid}>
-            {[0, 1, 2, 3, 4, 5].map(i => <EmptyGridItem key={i} />)}
-          </View>
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>
-              {activeTab === 'watched' ? 'No movies watched yet' :
-               activeTab === 'favorites' ? 'No favorites yet' :
-               activeTab === 'watchlist' ? 'Your watchlist is empty' :
-               'This list is empty'}
-            </Text>
-          </View>
+          <ProfileListGrid
+            listId={getActiveListId()}
+            listType={getActiveListType()}
+            onItemPress={(tmdbId, mediaType) => {
+              if (mediaType === 'tv') {
+                navigation.navigate('Series', {seriesId: tmdbId});
+              } else {
+                navigation.navigate('Movie', {movieId: tmdbId});
+              }
+            }}
+            onRemoved={handleMovieRemoved}
+          />
 
           <View style={{ height: 40 }} />
         </View>
