@@ -1,22 +1,23 @@
-import { TMDB_API_KEY, TMDB_BASE_URL } from '../constants/tmdb';
+import api from './api';
 import {
   Movie, TVSeries, TMDBResponse, MediaItem, DiscoverFilters,
 } from '../types/tmdb.types';
-import { PersonDetails, PersonCredits } from '../types/person.types'; 
+import { PersonDetails, PersonCredits } from '../types/person.types';
+
+export interface Person {
+  id: number;
+  name: string;
+  profile_path: string | null;
+  known_for_department: string | null;
+  known_for?: Array<{ title?: string; name?: string }>;
+}
 
 const fetchTMDB = async <T>(
   endpoint: string,
   params?: Record<string, string>,
 ): Promise<T> => {
-  const url = new URL(`${TMDB_BASE_URL}${endpoint}`);
-  url.searchParams.set('api_key', TMDB_API_KEY);
-  url.searchParams.set('language', 'en-US');
-  if (params) {
-    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  }
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(`TMDB error: ${res.status}`);
-  return res.json();
+  const response = await api.get<T>(`/tmdb${endpoint}`, { params });
+  return response.data;
 };
 
 const shuffle = <T>(arr: T[]): T[] => {
@@ -159,6 +160,9 @@ export const tmdbService = {
 
   searchSeries: (query: string, page = 1) =>
     fetchTMDB<TMDBResponse<TVSeries>>('/search/tv', { query, page: String(page) }),
+
+  searchPeople: (query: string, page = 1) =>
+    fetchTMDB<TMDBResponse<Person>>('/search/person', { query, page: String(page) }),
 
   getPersonDetails: (personId: number) =>
     fetchTMDB<PersonDetails>(`/person/${personId}`),

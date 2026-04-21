@@ -1,24 +1,18 @@
-import { TMDB_API_KEY, TMDB_BASE_URL } from '../constants/tmdb';
+import api from './api';
 import {
   SeriesDetails, SeriesCredits, SeriesImagesResponse,
   SeriesVideosResponse, SimilarSeries, SeriesSeasonDetail,
+  SeriesEpisode,
 } from '../types/series.types';
 
 interface TMDBListResponse<T> { results: T[] }
 
 const fetchTMDB = async <T>(
   endpoint: string,
-  params?: Record<string, string>,
+  params?: Record<string, string | number>,
 ): Promise<T> => {
-  const url = new URL(`${TMDB_BASE_URL}${endpoint}`);
-  url.searchParams.set('api_key', TMDB_API_KEY);
-  url.searchParams.set('language', 'en-US');
-  if (params) {
-    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  }
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(`TMDB error: ${res.status}`);
-  return res.json();
+  const response = await api.get<T>(`/tmdb${endpoint}`, { params });
+  return response.data;
 };
 
 export const tmdbSeriesService = {
@@ -29,9 +23,7 @@ export const tmdbSeriesService = {
     fetchTMDB<SeriesCredits>(`/tv/${seriesId}/credits`),
 
   getSeriesImages: (seriesId: number) =>
-    fetchTMDB<SeriesImagesResponse>(`/tv/${seriesId}/images`, {
-      include_image_language: 'en,null',
-    }),
+    fetchTMDB<SeriesImagesResponse>(`/tv/${seriesId}/images`),
 
   getSeriesVideos: (seriesId: number) =>
     fetchTMDB<SeriesVideosResponse>(`/tv/${seriesId}/videos`),
@@ -41,4 +33,9 @@ export const tmdbSeriesService = {
 
   getSeasonDetail: (seriesId: number, seasonNumber: number) =>
     fetchTMDB<SeriesSeasonDetail>(`/tv/${seriesId}/season/${seasonNumber}`),
+
+  getEpisodeDetail: (seriesId: number, seasonNumber: number, episodeNumber: number) =>
+    fetchTMDB<SeriesEpisode>(
+      `/tv/${seriesId}/season/${seasonNumber}/episode/${episodeNumber}`,
+    ),
 };

@@ -31,12 +31,10 @@ const searchMedia = async (query: string): Promise<MediaResult[]> => {
 };
 
 const searchCast = async (query: string): Promise<CastResult[]> => {
-  const url = `https://api.themoviedb.org/3/search/person?api_key=${process.env.EXPO_PUBLIC_TMDB_API_KEY ?? ''}&language=en-US&query=${encodeURIComponent(query)}&page=1`;
-  const res = await fetch(url);
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.results ?? []).slice(0, 15).map((p: any) => ({
-    id: p.id, name: p.name,
+  const data = await tmdbService.searchPeople(query);
+  return data.results.slice(0, 15).map(p => ({
+    id: p.id,
+    name: p.name,
     role: p.known_for_department ?? 'Acting',
     profilePath: p.profile_path,
     knownFor: p.known_for?.[0]?.title ?? p.known_for?.[0]?.name ?? '-',

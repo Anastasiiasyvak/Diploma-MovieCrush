@@ -5,9 +5,10 @@ import {
 } from 'react-native';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/fonts';
-import { TMDB_IMAGE_BASE, TMDB_API_KEY, TMDB_BASE_URL } from '../../constants/tmdb';
+import { TMDB_IMAGE_BASE } from '../../constants/tmdb';
 import { SeriesEpisode } from '../../types/series.types';
 import { episodeService } from '../../services/episodeService';
+import { tmdbSeriesService } from '../../services/tmdbSeriesService';
 import { StarRating } from '../../components/movie/StarRating';
 import { DetailedRatingSection } from '../../components/movie/DetailedRating';
 import { CustomAlert } from '../../components/ui/CustomAlert';
@@ -19,14 +20,10 @@ const EMPTY_RATING: DetailedRating = {
   script_score: null, music_score: null, acting_score: null,
 };
 
-const fetchEpisodeDetail = async (
+const fetchEpisodeDetail = (
   seriesId: number, seasonNumber: number, episodeNumber: number
-): Promise<SeriesEpisode> => {
-  const url = `${TMDB_BASE_URL}/tv/${seriesId}/season/${seasonNumber}/episode/${episodeNumber}?api_key=${TMDB_API_KEY}&language=en-US`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`TMDB error: ${res.status}`);
-  return res.json();
-};
+): Promise<SeriesEpisode> =>
+  tmdbSeriesService.getEpisodeDetail(seriesId, seasonNumber, episodeNumber);
 
 // Унікальн айдішка для рейтингу епізоду
 const episodeRatingId = (seriesId: number, season: number, episode: number): number =>

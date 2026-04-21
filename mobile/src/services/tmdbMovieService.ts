@@ -1,4 +1,4 @@
-import { TMDB_API_KEY, TMDB_BASE_URL } from '../constants/tmdb';
+import api from './api';
 import {
   MovieDetails, MovieCredits, MovieImagesResponse,
   MovieVideosResponse, SimilarMovie,
@@ -10,17 +10,10 @@ interface TMDBResponse<T> {
 
 const fetchTMDB = async <T>(
   endpoint: string,
-  params?: Record<string, string>,
+  params?: Record<string, string | number>,
 ): Promise<T> => {
-  const url = new URL(`${TMDB_BASE_URL}${endpoint}`);
-  url.searchParams.set('api_key', TMDB_API_KEY);
-  url.searchParams.set('language', 'en-US');
-  if (params) {
-    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  }
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(`TMDB error: ${res.status}`);
-  return res.json();
+  const response = await api.get<T>(`/tmdb${endpoint}`, { params });
+  return response.data;
 };
 
 export const tmdbMovieService = {
@@ -31,9 +24,7 @@ export const tmdbMovieService = {
     fetchTMDB<MovieCredits>(`/movie/${movieId}/credits`),
 
   getMovieImages: (movieId: number) =>
-    fetchTMDB<MovieImagesResponse>(`/movie/${movieId}/images`, {
-      include_image_language: 'en,null',
-    }),
+    fetchTMDB<MovieImagesResponse>(`/movie/${movieId}/images`),
 
   getMovieVideos: (movieId: number) =>
     fetchTMDB<MovieVideosResponse>(`/movie/${movieId}/videos`),
