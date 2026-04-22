@@ -6,6 +6,7 @@ import {
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/fonts';
 import { authService } from '../../services/api';
+import { saveTokens } from '../../services/storage';
 import { Logo } from '../../components/ui/Logo';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { InputField } from '../../components/ui/InputField';
@@ -91,12 +92,18 @@ export default function RegisterScreen({ navigation }: any) {
 
     setIsLoading(true);
     try {
-      await authService.register({
+      const response = await authService.register({
         ...form,
         email: form.email.trim().toLowerCase(),
         username: form.username.trim(),
       });
-      navigation.replace('CheckEmail', { email: form.email.trim().toLowerCase() });
+
+      if (response.accessToken && response.refreshToken) {
+        await saveTokens(response.accessToken, response.refreshToken);
+        navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+      } else {
+        navigation.replace('CheckEmail', { email: form.email.trim().toLowerCase() });
+      }
     } catch (err: any) {
       const serverError = err.response?.data?.error || 'Registration failed. Please try again.';
       const serverField = err.response?.data?.field;
