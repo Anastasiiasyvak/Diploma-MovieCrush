@@ -37,6 +37,12 @@ api.interceptors.response.use(
   }
 );
 
+export interface RegisterResponse {
+  message: string;
+  accessToken?: string;
+  refreshToken?: string;
+}
+
 export const authService = {
   register: async (data: {
     email: string;
@@ -44,8 +50,8 @@ export const authService = {
     username: string;
     first_name?: string;
     last_name?: string;
-  }) => {
-    const response = await api.post('/auth/register', data);
+  }): Promise<RegisterResponse> => {
+    const response = await api.post<RegisterResponse>('/auth/register', data);
     return response.data;
   },
 

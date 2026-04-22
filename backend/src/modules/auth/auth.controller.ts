@@ -164,11 +164,22 @@ export const register = async (req: Request, res: Response) => {
     if (input.first_name) input.first_name = input.first_name.trim();
     if (input.last_name) input.last_name = input.last_name.trim();
 
-    await registerUser(input);
+    const user = await registerUser(input);
 
-    res.status(201).json({
-      message: 'Registration successful! Please check your email to verify your account.',
-    });
+    const emailVerificationEnabled = process.env.EMAIL_VERIFICATION_ENABLED === 'true';
+
+    if (emailVerificationEnabled) {
+      res.status(201).json({
+        message: 'Registration successful! Please check your email to verify your account.',
+      });
+    } else {
+      const { accessToken, refreshToken } = generateTokens(user.id, user.uuid);
+      res.status(201).json({
+        message: 'Registration successful!',
+        accessToken,
+        refreshToken,
+      });
+    }
   } catch (err: any) {
     if (err.message === 'Email already exists') {
       res.status(409).json({ error: 'This email is already registered', field: 'email' }); return;

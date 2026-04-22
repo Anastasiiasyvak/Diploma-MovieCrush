@@ -6,6 +6,9 @@ import { RegisterInput, LoginInput } from './auth.types';
 import { User } from '../shared/user.types';
 import { createDefaultLists } from '../lists/lists.service';
 
+const isEmailVerificationEnabled = (): boolean =>
+  process.env.EMAIL_VERIFICATION_ENABLED === 'true';
+
 export const registerUser = async (input: RegisterInput): Promise<User> => {
   const { email, password, username, first_name, last_name, language } = input;
 
@@ -16,24 +19,35 @@ export const registerUser = async (input: RegisterInput): Promise<User> => {
   if (existingUsername.rows.length > 0) throw new Error('Username already exists');
 
   const password_hash = await bcrypt.hash(password, 12);
-  const verificationToken = crypto.randomBytes(32).toString('hex');
-  const tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  const verificationEnabled = isEmailVerificationEnabled();
+  const verificationToken = verificationEnabled ? crypto.randomBytes(32).toString('hex') : null;
+  const tokenExpiresAt    = verificationEnabled ? new Date(Date.now() + 24 * 60 * 60 * 1000) : null;
+  const accountStatus     = verificationEnabled ? 'pending' : 'active';
+  const emailVerified     = !verificationEnabled;
 
   const result = await pool.query(
     `INSERT INTO users
       (email, password_hash, username, first_name, last_name, language,
-       account_status, verification_token, verification_token_expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8)
+       account_status, email_verified, verification_token, verification_token_expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
-    [email, password_hash, username, first_name || null, last_name || null, language || 'en', verificationToken, tokenExpiresAt]
+    [
+      email, password_hash, username, first_name || null, last_name || null, language || 'en',
+      accountStatus, emailVerified, verificationToken, tokenExpiresAt,
+    ]
   );
 
   const user: User = result.rows[0];
   await createDefaultLists(user.id);
 
-  sendVerificationEmail(email, username, verificationToken)
-    .then(() => console.log('Verification email sent to:', email))
-    .catch(err => console.error('Failed to send verification email:', err.message));
+  if (verificationEnabled && verificationToken) {
+    sendVerificationEmail(email, username, verificationToken)
+      .then(() => console.log('Verification email sent to:', email))
+      .catch(err => console.error('Failed to send verification email:', err.message));
+  } else {
+    console.log(`[dev] Email verification disabled — user ${email} auto-activated`);
+  }
 
   return user;
 };
@@ -84,7 +98,7 @@ export const requestPasswordReset = async (email: string): Promise<void> => {
 
   const user = result.rows[0];
   const resetToken = crypto.randomBytes(32).toString('hex');
-  const tokenExpiresAt = new Date(Date.now() + 60 * 60 * 1000); 
+  const tokenExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
   await pool.query(
     `UPDATE users SET reset_token = $1, reset_token_expires_at = $2 WHERE id = $3`,
@@ -133,8 +147,11 @@ export const loginUser = async (input: LoginInput): Promise<User> => {
   if (result.rows.length === 0 || !isValidPassword) throw new Error('Invalid email or password');
 
   const user = result.rows[0];
-  if (user.account_status === 'banned')  throw new Error('Account is banned');
-  if (user.account_status === 'pending') throw new Error('Email not verified');
+  if (user.account_status === 'banned') throw new Error('Account is banned');
+
+  if (isEmailVerificationEnabled() && user.account_status === 'pending') {
+    throw new Error('Email not verified');
+  }
 
   await pool.query('UPDATE users SET last_active_at = NOW() WHERE id = $1', [user.id]);
 
