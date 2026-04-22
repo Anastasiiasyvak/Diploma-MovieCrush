@@ -17,9 +17,7 @@ export default function CheckEmailScreen({ route, navigation }: any) {
   useEffect(() => {
     intervalRef.current = setInterval(async () => {
       try {
-        const response = await api.get('/auth/check-verified', {
-          params: { email },
-        });
+        const response = await api.post('/auth/check-verified', { email });
 
         if (response.data.verified) {
           clearInterval(intervalRef.current!);

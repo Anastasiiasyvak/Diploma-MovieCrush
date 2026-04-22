@@ -11,6 +11,10 @@ import ProfileScreen from '../screens/Profile/ProfileScreen';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
 import RecommendationsScreen from '../screens/Recommendations/RecommendationsScreen';
 import ChallengesScreen from '../screens/Challenges/ChallengesScreen';
+import PersonScreen from '../screens/Person/PersonScreen';
+import MovieScreen from '../screens/Movie/MovieScreen';
+import SeriesScreen from '../screens/Series/SeriesScreen';
+import EpisodeScreen from '../screens/Episode/EpisodeScreen';
 
 const Stack = createStackNavigator();
 
@@ -34,6 +38,12 @@ export default function AppNavigator() {
         <Stack.Screen name="Challenges"     component={ChallengesScreen} />
         <Stack.Screen name="Profile"        component={ProfileScreen} />
         <Stack.Screen name="Settings"       component={SettingsScreen} />
+
+        {/* Detail screens */}
+        <Stack.Screen name="Person"         component={PersonScreen} />
+        <Stack.Screen name="Movie"          component={MovieScreen} />
+        <Stack.Screen name="Series"         component={SeriesScreen} />
+        <Stack.Screen name="Episode"        component={EpisodeScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
