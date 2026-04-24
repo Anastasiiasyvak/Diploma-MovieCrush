@@ -8,6 +8,7 @@ import CheckEmailScreen from '../screens/Auth/CheckEmailScreen';
 import ForgotPasswordScreen from '../screens/Auth/ForgotPasswordScreen';
 import HomeScreen from '../screens/Home/HomeScreen';
 import ProfileScreen from '../screens/Profile/ProfileScreen';
+import UserProfileScreen from '../screens/UserProfile/UserProfileScreen';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
 import RecommendationsScreen from '../screens/Recommendations/RecommendationsScreen';
 import ChallengesScreen from '../screens/Challenges/ChallengesScreen';
@@ -37,6 +38,7 @@ export default function AppNavigator() {
         <Stack.Screen name="Recommendations" component={RecommendationsScreen} />
         <Stack.Screen name="Challenges"     component={ChallengesScreen} />
         <Stack.Screen name="Profile"        component={ProfileScreen} />
+        <Stack.Screen name="UserProfile"    component={UserProfileScreen} />
         <Stack.Screen name="Settings"       component={SettingsScreen} />
 
         {/* Detail screens */}

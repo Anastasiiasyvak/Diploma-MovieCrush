@@ -1,14 +1,15 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 
-import authRoutes from './modules/auth/auth.routes';
-import profileRoutes from './modules/profile/profile.routes';
-import listsRoutes from './modules/lists/lists.routes';
+import authRoutes     from './modules/auth/auth.routes';
+import profileRoutes  from './modules/profile/profile.routes';
+import listsRoutes    from './modules/lists/lists.routes';
 import settingsRoutes from './modules/settings/settings.routes';
-import movieRoutes from './modules/movies/movie.routes';
-import tmdbRoutes from './modules/tmdb/tmdb.routes';
+import movieRoutes    from './modules/movies/movie.routes';
+import tmdbRoutes     from './modules/tmdb/tmdb.routes';
+import followsRoutes  from './modules/follows/follows.routes';
 
 const app = express();
 
@@ -17,13 +18,10 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use((req: Request, _res: Response, next: NextFunction) => {
-  console.log(`[REQ] ${req.method} ${req.originalUrl}`);
-  next();
-});
-
-// я змінила трошки цей лімітер, бо я прочитала що tmdb відмінили старий ліміт 40/10с ще давно, а зараз 40/1с на IP, тому я поставила 100/10с, 
-// щоб не перевищувати цей ліміт, і щоб юзери могли спокійно відкривати екрани з паралельними запитами
+// TMDB відмінили старий ліміт 40/10с у грудні 2019, зараз ~40 req/s на IP.
+// Ставимо 100/10с (в середньому 10 req/s) — у 4 рази нижче стелі TMDB,
+// з запасом на кілька одночасних юзерів, і достатньо щоб один юзер
+// міг спокійно відкривати екрани з паралельними запитами.
 const limiter = rateLimit({
   windowMs: 10 * 1000,
   max: 100,
@@ -42,5 +40,6 @@ app.use('/api',          listsRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api',          movieRoutes);
 app.use('/api/tmdb',     tmdbRoutes);
+app.use('/api/follows',  followsRoutes);
 
 export default app;
