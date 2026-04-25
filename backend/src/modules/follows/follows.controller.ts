@@ -5,6 +5,7 @@ import {
   getFollowers, getFollowing, getFriends,
   getFollowStatus, getMyCounts, getPublicProfile,
   searchUsers, getUserLists, getUserListItems,
+  getFollowingRatingsForMedia,
 } from './follows.service';
 
 const parseUserId = (raw: string): number | null => {
@@ -196,6 +197,20 @@ export const getListItems = async (req: AuthRequest, res: Response) => {
       res.status(404).json({ error: err.message }); return;
     }
     console.error('getListItems error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const getRatings = async (req: AuthRequest, res: Response) => {
+  try {
+    const tmdbIdRaw = req.params['tmdbId'] as string;
+    const tmdbId = parseInt(tmdbIdRaw, 10);
+    if (isNaN(tmdbId)) { res.status(400).json({ error: 'Invalid tmdb id' }); return; }
+
+    const ratings = await getFollowingRatingsForMedia(req.userId!, tmdbId);
+    res.json({ ratings });
+  } catch (err) {
+    console.error('getRatings error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

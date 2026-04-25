@@ -51,6 +51,13 @@ export interface ListItemRaw {
   added_at: string;
 }
 
+export interface FollowingRating {
+  user_id: number;
+  username: string;
+  profile_image_url: string | null;
+  overall_rating: number;     
+  rated_at: string;
+}
 
 export const followsService = {
   follow: async (userId: number): Promise<FollowCounts> => {
@@ -123,5 +130,10 @@ export const followsService = {
   getUserListItems: async (userId: number, listId: number): Promise<ListItemRaw[]> => {
     const res = await api.get<{ items: ListItemRaw[] }>(`/follows/user/${userId}/lists/${listId}`);
     return res.data.items;
+  },
+
+  getFollowingRatings: async (tmdbId: number): Promise<FollowingRating[]> => {
+    const res = await api.get<{ ratings: FollowingRating[] }>(`/follows/ratings/${tmdbId}`);
+    return res.data.ratings;
   },
 };

@@ -24,6 +24,7 @@ import { StarRating } from '../../components/movie/StarRating';
 import { MoodPicker } from '../../components/movie/MoodPicker';
 import { BestActorPicker } from '../../components/movie/BestActorPicker';
 import { DetailedRatingSection } from '../../components/movie/DetailedRating';
+import { FollowingRatings } from '../../components/follows/FollowingRatings';
 
 import {
   SeriesDetails, SeriesCredits, SeriesImagesResponse,
@@ -276,6 +277,12 @@ export default function SeriesScreen({ navigation, route }: any) {
             <PlatformRatings
               tmdbRating={series.vote_average}
               tmdbVotes={series.vote_count}
+            />
+            <View style={styles.gap} />
+
+            <FollowingRatings
+              tmdbId={series.id}
+              onUserPress={(userId) => navigation.navigate('UserProfile', { userId })}
             />
             <View style={styles.gap} />
 

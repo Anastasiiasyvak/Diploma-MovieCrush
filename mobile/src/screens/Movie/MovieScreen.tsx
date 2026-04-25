@@ -22,6 +22,7 @@ import { StarRating } from '../../components/movie/StarRating';
 import { MoodPicker } from '../../components/movie/MoodPicker';
 import { BestActorPicker } from '../../components/movie/BestActorPicker';
 import { DetailedRatingSection } from '../../components/movie/DetailedRating';
+import { FollowingRatings } from '../../components/follows/FollowingRatings';
 
 import {
   MovieDetails, MovieCredits, MovieImagesResponse,
@@ -107,7 +108,6 @@ export default function MovieScreen({ navigation, route }: any) {
     decodeUserId();
   }, []);
 
-  // Перезавантажую дані при кожному поверненні на екран
   useFocusEffect(
     useCallback(() => {
       loadData();
@@ -174,7 +174,6 @@ export default function MovieScreen({ navigation, route }: any) {
     }
   };
 
-  // Якщо юзер знімає watched на watch автоматично скидаються всі рейтинги
   const handleActionsChange = async (updated: MovieActions) => {
     const wasWatched = actions.is_watched;
     const nowWatched = updated.is_watched;
@@ -268,6 +267,11 @@ export default function MovieScreen({ navigation, route }: any) {
             <TrailerButton videos={videos.results} />
             <View style={styles.gap} />
             <PlatformRatings tmdbRating={movie.vote_average} tmdbVotes={movie.vote_count} />
+            <View style={styles.gap} />
+            <FollowingRatings
+              tmdbId={movie.id}
+              onUserPress={(userId) => navigation.navigate('UserProfile', { userId })}
+            />
             <View style={styles.gap} />
             <MovieGallery images={images.backdrops} />
             <View style={styles.gap} />

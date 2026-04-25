@@ -23,5 +23,6 @@ router.get('/user/:userId/friends', ctrl.getUserFriends);
 
 router.get('/user/:userId/lists', ctrl.getLists);
 router.get('/user/:userId/lists/:listId', ctrl.getListItems);
+router.get('/ratings/:tmdbId', ctrl.getRatings);
 
 export default router;

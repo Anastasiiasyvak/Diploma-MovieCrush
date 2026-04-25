@@ -12,7 +12,7 @@ const recomputeCounts = async (userId: number): Promise<void> => {
     `UPDATE users SET
        followers_count = (SELECT COUNT(*) FROM user_follows WHERE following_id = $1),
        following_count = (SELECT COUNT(*) FROM user_follows WHERE follower_id  = $1),
-       friends_count   = (
+       friends_count = (
          SELECT COUNT(*) FROM user_follows f1
          WHERE f1.follower_id = $1
            AND EXISTS (
@@ -165,7 +165,6 @@ export const getPublicProfile = async (
 
   const row = result.rows[0];
   const status = await getFollowStatus(viewerId, targetUserId);
-
   const canSeeSocials = status.is_friend;
 
   return {
@@ -243,8 +242,6 @@ export const getUserLists = async (targetUserId: number): Promise<PublicListSumm
   return result.rows;
 };
 
-// список має належати таргет юзеру І бути дефолтним або публічним
-
 export const getUserListItems = async (
   targetUserId: number, listId: number
 ): Promise<{ tmdb_id: number; media_type: string; added_at: Date }[]> => {
@@ -261,6 +258,35 @@ export const getUserListItems = async (
      FROM list_items WHERE list_id = $1
      ORDER BY added_at DESC`,
     [listId]
+  );
+  return result.rows;
+};
+
+export interface FollowingRating {
+  user_id: number;
+  username: string;
+  profile_image_url: string | null;
+  overall_rating: number;   
+  rated_at: Date;
+}
+
+export const getFollowingRatingsForMedia = async (
+  viewerId: number, tmdbId: number
+): Promise<FollowingRating[]> => {
+  const result = await pool.query(
+    `SELECT
+       u.id AS user_id,
+       u.username,
+       u.profile_image_url,
+       udr.overall_rating,
+       udr.updated_at AS rated_at
+     FROM user_detailed_ratings udr
+     JOIN user_follows uf ON uf.following_id = udr.user_id AND uf.follower_id = $1
+     JOIN users u ON u.id = udr.user_id AND u.account_status = 'active'
+     WHERE udr.tmdb_id = $2
+       AND udr.overall_rating IS NOT NULL
+     ORDER BY udr.updated_at DESC`,
+    [viewerId, tmdbId]
   );
   return result.rows;
 };
