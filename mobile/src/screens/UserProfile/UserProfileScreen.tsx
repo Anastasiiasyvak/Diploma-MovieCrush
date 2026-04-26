@@ -13,8 +13,8 @@ import {
   followsService, UserProfileWithStatus, PublicListSummary,
 } from '../../services/followsService';
 import { profileService } from '../../services/profileService';
-import { FollowListModal, FollowListType } from '../../components/follows/FollowListModal';
-import { PublicListGrid } from '../../components/follows/PublicListGrid';
+import { FollowListModal, FollowListType } from '../../components/follows/FollowListModal/FollowListModal';
+import { PublicListGrid } from '../../components/follows/PublicListGrid/PublicListGrid';
 import { styles } from './UserProfileScreen.styles';
 
 const Avatar: React.FC<{ imageUrl?: string | null; size?: number }> = ({

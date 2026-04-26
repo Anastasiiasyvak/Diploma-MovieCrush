@@ -3,8 +3,8 @@ import {
   View, Text, Modal, Pressable, ScrollView, TouchableOpacity,
   Image, ActivityIndicator,
 } from 'react-native';
-import { COLORS } from '../../constants/colors';
-import { UserListItem } from '../../services/followsService';
+import { COLORS } from '../../../constants/colors';
+import { UserListItem } from '../../../services/followsService';
 import { styles } from './FollowListModal.styles';
 
 export type FollowListType = 'friends' | 'followers' | 'following';

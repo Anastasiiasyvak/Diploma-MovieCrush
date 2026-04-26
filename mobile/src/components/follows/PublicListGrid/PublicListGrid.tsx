@@ -1,23 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, Image, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Dimensions,
+  View, Text, Image, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
-import { COLORS } from '../../constants/colors';
-import { FONTS } from '../../constants/fonts';
-import { POSTER_SIZES } from '../../constants/tmdb';
-import { followsService } from '../../services/followsService';
-import { tmdbMovieService } from '../../services/tmdbMovieService';
-import { tmdbSeriesService } from '../../services/tmdbSeriesService';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const MAX_WIDTH = 480;
-const CONTENT_W = Math.min(SCREEN_WIDTH, MAX_WIDTH);
-const COLS = 3;
-const CARD_GAP = 10;
-const SIDE_PAD = 16;
-const CARD_W = (CONTENT_W - SIDE_PAD * 2 - CARD_GAP * (COLS - 1)) / COLS;
-const CARD_H = CARD_W * 1.5;
+import { COLORS } from '../../../constants/colors';
+import { POSTER_SIZES } from '../../../constants/tmdb';
+import { followsService } from '../../../services/followsService';
+import { tmdbMovieService } from '../../../services/tmdbMovieService';
+import { tmdbSeriesService } from '../../../services/tmdbSeriesService';
+import { styles, GRID_CONFIG } from './PublicListGrid.styles';
 
 interface MediaMeta {
   tmdb_id: number;
@@ -52,7 +42,7 @@ export const PublicListGrid: React.FC<Props> = ({ userId, listId, listType, onIt
       const sliced = data.slice(0, 30);
 
       const metas = await Promise.allSettled(
-        sliced.map(async i => {
+        sliced.map(async (i): Promise<MediaMeta> => {
           if (i.media_type === 'tv') {
             const d = await tmdbSeriesService.getSeriesDetails(i.tmdb_id);
             return {
@@ -61,7 +51,7 @@ export const PublicListGrid: React.FC<Props> = ({ userId, listId, listType, onIt
               poster_path: d.poster_path,
               release_date: d.first_air_date,
               vote_average: d.vote_average,
-              media_type: 'tv' as const,
+              media_type: 'tv',
             };
           } else {
             const d = await tmdbMovieService.getMovieDetails(i.tmdb_id);
@@ -71,7 +61,7 @@ export const PublicListGrid: React.FC<Props> = ({ userId, listId, listType, onIt
               poster_path: d.poster_path,
               release_date: d.release_date,
               vote_average: d.vote_average,
-              media_type: 'movie' as const,
+              media_type: 'movie',
             };
           }
         })
@@ -82,10 +72,10 @@ export const PublicListGrid: React.FC<Props> = ({ userId, listId, listType, onIt
         return {
           tmdb_id: sliced[idx].tmdb_id,
           title: 'Unknown',
-          poster_path:  null,
+          poster_path: null,
           release_date: '',
           vote_average: 0,
-          media_type: (sliced[idx].media_type as 'movie' | 'tv') ?? 'movie',
+          media_type: sliced[idx].media_type as 'movie' | 'tv',
         };
       });
 
@@ -121,8 +111,8 @@ export const PublicListGrid: React.FC<Props> = ({ userId, listId, listType, onIt
   return (
     <View style={styles.grid}>
       {items.map((m, index) => {
-        const posterUrl  = m.poster_path ? `${POSTER_SIZES.medium}${m.poster_path}` : null;
-        const marginLeft = index % COLS !== 0 ? CARD_GAP : 0;
+        const posterUrl = m.poster_path ? `${POSTER_SIZES.medium}${m.poster_path}` : null;
+        const marginLeft = index % GRID_CONFIG.COLS !== 0 ? GRID_CONFIG.CARD_GAP : 0;
 
         return (
           <TouchableOpacity
@@ -166,52 +156,3 @@ export const PublicListGrid: React.FC<Props> = ({ userId, listId, listType, onIt
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  loader: { paddingVertical: 32, alignItems: 'center' },
-  empty:  { paddingVertical: 24, alignItems: 'center' },
-  emptyText: { fontFamily: FONTS.regular, fontSize: 13, color: '#2a2a2a' },
-
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: SIDE_PAD,
-    paddingTop: 12,
-    rowGap: CARD_GAP,
-  },
-  card: { width: CARD_W },
-  posterWrap: {
-    width: CARD_W,
-    height: CARD_H,
-    borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: COLORS.cardBg,
-    marginBottom: 6,
-  },
-  poster: { width: '100%', height: '100%' },
-  posterPlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.cardDark,
-  },
-  placeholderIcon: { fontSize: 28 },
-
-  ratingBadge: {
-    position: 'absolute', bottom: 6, left: 5,
-    backgroundColor: 'rgba(0,0,0,0.78)',
-    borderRadius: 6, paddingVertical: 2, paddingHorizontal: 5,
-  },
-  ratingText: { fontFamily: FONTS.medium, fontSize: 9, color: COLORS.gold },
-
-  typeBadge: {
-    position: 'absolute', top: 6, right: 5,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    borderRadius: 5, paddingVertical: 2, paddingHorizontal: 5,
-  },
-  typeBadgeTv: { backgroundColor: 'rgba(255,175,204,0.25)' },
-  typeText: { fontFamily: FONTS.medium, fontSize: 8, color: '#888888' },
-
-  title: { fontFamily: FONTS.medium, fontSize: 11, color: COLORS.white, lineHeight: 15 },
-  year:  { fontFamily: FONTS.regular, fontSize: 10, color: COLORS.cardTextLight, marginTop: 2 },
-});

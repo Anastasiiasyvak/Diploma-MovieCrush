@@ -18,13 +18,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// TMDB відмінили старий ліміт 40/10с у грудні 2019, зараз ~40 req/s на IP.
-// Ставимо 100/10с (в середньому 10 req/s) — у 4 рази нижче стелі TMDB,
-// з запасом на кілька одночасних юзерів, і достатньо щоб один юзер
-// міг спокійно відкривати екрани з паралельними запитами.
 const limiter = rateLimit({
-  windowMs: 10 * 1000,
-  max: 100,
+  windowMs: 1 * 1000,   
+  max: 30,               
   message: { error: 'Too many requests, please try again later' },
 });
 

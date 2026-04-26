@@ -1,6 +1,32 @@
 import pool from '../../config/database';
 import { PublicUserProfile, UserListItem, FollowStatus, FollowCounts } from './follows.types';
 
+export class FollowError extends Error {
+  public readonly code: string;
+  
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = 'FollowError';
+    this.code = code;
+    Object.setPrototypeOf(this, FollowError.prototype);
+  }
+}
+
+export const FOLLOW_ERROR_CODES = {
+  SELF_FOLLOW: 'SELF_FOLLOW',
+  USER_NOT_FOUND: 'USER_NOT_FOUND',
+  LIST_NOT_FOUND: 'LIST_NOT_FOUND',
+} as const;
+
+const createSelfFollowError = () => 
+  new FollowError(FOLLOW_ERROR_CODES.SELF_FOLLOW, 'Cannot follow yourself');
+
+const createUserNotFoundError = () => 
+  new FollowError(FOLLOW_ERROR_CODES.USER_NOT_FOUND, 'User not found');
+
+const createListNotFoundError = () => 
+  new FollowError(FOLLOW_ERROR_CODES.LIST_NOT_FOUND, 'List not found or private');
+
 const PUBLIC_USER_FIELDS = `
   u.id, u.uuid, u.username, u.first_name, u.last_name, u.profile_image_url,
   u.friends_count, u.followers_count, u.following_count,
@@ -29,13 +55,13 @@ const recomputeCounts = async (userId: number): Promise<void> => {
 export const followUser = async (
   followerId: number, targetUserId: number
 ): Promise<FollowCounts> => {
-  if (followerId === targetUserId) throw new Error('Cannot follow yourself');
+  if (followerId === targetUserId) throw createSelfFollowError();
 
   const target = await pool.query(
     `SELECT id FROM users WHERE id = $1 AND account_status = 'active'`,
     [targetUserId]
   );
-  if (target.rows.length === 0) throw new Error('User not found');
+  if (target.rows.length === 0) throw createUserNotFoundError();
 
   await pool.query(
     `INSERT INTO user_follows (follower_id, following_id)
@@ -225,7 +251,7 @@ export const getUserLists = async (targetUserId: number): Promise<PublicListSumm
     `SELECT id FROM users WHERE id = $1 AND account_status = 'active'`,
     [targetUserId]
   );
-  if (userCheck.rows.length === 0) throw new Error('User not found');
+  if (userCheck.rows.length === 0) throw createUserNotFoundError();
 
   const result = await pool.query(
     `SELECT
@@ -251,7 +277,7 @@ export const getUserListItems = async (
        AND (list_type IN ('watched', 'favorites', 'watchlist') OR is_private = FALSE)`,
     [listId, targetUserId]
   );
-  if (listCheck.rows.length === 0) throw new Error('List not found or private');
+  if (listCheck.rows.length === 0) throw createListNotFoundError();
 
   const result = await pool.query(
     `SELECT tmdb_id, media_type, added_at

@@ -16,7 +16,7 @@ import { profileService, ProfileData, UserList } from '../../services/profileSer
 import { clearTokens } from '../../services/storage';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileListGrid } from '../../components/profile/ProfileListGrid';
-import { FollowListModal, FollowListType } from '../../components/follows/FollowListModal';
+import { FollowListModal, FollowListType } from '../../components/follows/FollowListModal/FollowListModal';
 import { followsService } from '../../services/followsService';
 
 const { width } = Dimensions.get('window');

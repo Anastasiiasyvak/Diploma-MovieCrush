@@ -24,7 +24,7 @@ import { StarRating } from '../../components/movie/StarRating';
 import { MoodPicker } from '../../components/movie/MoodPicker';
 import { BestActorPicker } from '../../components/movie/BestActorPicker';
 import { DetailedRatingSection } from '../../components/movie/DetailedRating';
-import { FollowingRatings } from '../../components/follows/FollowingRatings';
+import { FollowingRatings } from '../../components/follows/FollowingRatings/FollowingRatings';
 
 import {
   SeriesDetails, SeriesCredits, SeriesImagesResponse,

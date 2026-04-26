@@ -6,6 +6,7 @@ import {
   getFollowStatus, getMyCounts, getPublicProfile,
   searchUsers, getUserLists, getUserListItems,
   getFollowingRatingsForMedia,
+  FollowError, FOLLOW_ERROR_CODES,
 } from './follows.service';
 
 const parseUserId = (raw: string): number | null => {
@@ -22,11 +23,15 @@ export const follow = async (req: AuthRequest, res: Response) => {
     const counts = await followUser(req.userId!, targetId);
     res.json(counts);
   } catch (err: any) {
-    if (err.message === 'Cannot follow yourself') {
-      res.status(400).json({ error: err.message }); return;
-    }
-    if (err.message === 'User not found') {
-      res.status(404).json({ error: err.message }); return;
+    if (err instanceof FollowError) {
+      switch (err.code) {
+        case FOLLOW_ERROR_CODES.SELF_FOLLOW:
+          res.status(400).json({ error: err.message }); return;
+        case FOLLOW_ERROR_CODES.USER_NOT_FOUND:
+          res.status(404).json({ error: err.message }); return;
+        default:
+          res.status(400).json({ error: err.message }); return;
+      }
     }
     console.error('follow error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -176,7 +181,7 @@ export const getLists = async (req: AuthRequest, res: Response) => {
     const lists = await getUserLists(targetId);
     res.json({ lists });
   } catch (err: any) {
-    if (err.message === 'User not found') {
+    if (err instanceof FollowError && err.code === FOLLOW_ERROR_CODES.USER_NOT_FOUND) {
       res.status(404).json({ error: err.message }); return;
     }
     console.error('getLists error:', err);
@@ -193,7 +198,7 @@ export const getListItems = async (req: AuthRequest, res: Response) => {
     const items = await getUserListItems(targetId, listId);
     res.json({ items });
   } catch (err: any) {
-    if (err.message === 'List not found or private') {
+    if (err instanceof FollowError && err.code === FOLLOW_ERROR_CODES.LIST_NOT_FOUND) {
       res.status(404).json({ error: err.message }); return;
     }
     console.error('getListItems error:', err);

@@ -11,7 +11,7 @@ import { episodeService } from '../../services/episodeService';
 import { tmdbSeriesService } from '../../services/tmdbSeriesService';
 import { StarRating } from '../../components/movie/StarRating';
 import { DetailedRatingSection } from '../../components/movie/DetailedRating';
-import { FollowingRatings } from '../../components/follows/FollowingRatings';
+import { FollowingRatings } from '../../components/follows/FollowingRatings/FollowingRatings';
 import { CustomAlert } from '../../components/ui/CustomAlert';
 import { movieService } from '../../services/movieService';
 import { DetailedRating } from '../../types/movie.types';
