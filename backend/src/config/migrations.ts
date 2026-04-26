@@ -227,8 +227,35 @@ const createTables = async () => {
     `);
     console.log('Table user_follows ready');
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_soulmate_matches (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        matched_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        wrapped_year INT NOT NULL,
+        similarity_score DECIMAL(5,4) NOT NULL,
+        rating_similarity DECIMAL(5,4) DEFAULT 0,
+        genre_similarity DECIMAL(5,4) DEFAULT 0,
+        actor_similarity DECIMAL(5,4) DEFAULT 0,
+        mood_similarity DECIMAL(5,4) DEFAULT 0,
+        director_similarity DECIMAL(5,4) DEFAULT 0,
+        disliked_similarity DECIMAL(5,4) DEFAULT 0,
+        shared_movies_count INT DEFAULT 0,
+        top_shared_movies BIGINT[] DEFAULT '{}',
+        shared_genres TEXT[] DEFAULT '{}',
+        shared_disliked BIGINT[] DEFAULT '{}',
+        computed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    
+        UNIQUE (user_id, wrapped_year),
+        CHECK (user_id <> matched_user_id)
+      );
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_soulmate_user_year
+        ON user_soulmate_matches(user_id, wrapped_year);
+    `);
+    console.log('Table user_soulmate_matches ready');
+
     console.log('Converting tmdb_id columns to BIGINT...');
     
     await pool.query(`ALTER TABLE list_items ALTER COLUMN tmdb_id TYPE BIGINT;`);
