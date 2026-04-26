@@ -11,6 +11,7 @@ import { episodeService } from '../../services/episodeService';
 import { tmdbSeriesService } from '../../services/tmdbSeriesService';
 import { StarRating } from '../../components/movie/StarRating';
 import { DetailedRatingSection } from '../../components/movie/DetailedRating';
+import { FollowingRatings } from '../../components/follows/FollowingRatings/FollowingRatings';
 import { CustomAlert } from '../../components/ui/CustomAlert';
 import { movieService } from '../../services/movieService';
 import { DetailedRating } from '../../types/movie.types';
@@ -214,6 +215,11 @@ export default function EpisodeScreen({ navigation, route }: any) {
           ) : null}
 
           <View style={styles.divider} />
+
+          <FollowingRatings
+            tmdbId={ratingId}
+            onUserPress={(userId) => navigation.navigate('UserProfile', { userId })}
+          />
 
           <View style={styles.rateSection}>
             <Text style={styles.rateSectionTitle}>Your Rating</Text>

@@ -209,6 +209,24 @@ const createTables = async () => {
     `);
     console.log('Table user_yearly_stats ready');
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_follows (
+        id BIGSERIAL PRIMARY KEY,
+        follower_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        following_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (follower_id, following_id),
+        CHECK (follower_id <> following_id)
+      );
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_user_follows_follower ON user_follows(follower_id);
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_user_follows_following ON user_follows(following_id);
+    `);
+    console.log('Table user_follows ready');
+
 
     
     console.log('Converting tmdb_id columns to BIGINT...');

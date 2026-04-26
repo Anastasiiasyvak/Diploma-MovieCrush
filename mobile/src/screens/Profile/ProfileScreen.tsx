@@ -16,6 +16,8 @@ import { profileService, ProfileData, UserList } from '../../services/profileSer
 import { clearTokens } from '../../services/storage';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileListGrid } from '../../components/profile/ProfileListGrid';
+import { FollowListModal, FollowListType } from '../../components/follows/FollowListModal/FollowListModal';
+import { followsService } from '../../services/followsService';
 
 const { width } = Dimensions.get('window');
 const MAX_WIDTH = 480;
@@ -55,8 +57,7 @@ export default function ProfileScreen({ navigation }: any) {
   const [newListName, setNewListName] = useState('');
   const [newListPrivate, setNewListPrivate] = useState(false);
   const [isCreatingList, setIsCreatingList] = useState(false);
-  const [showFriendsModal, setShowFriendsModal] = useState(false);
-  const [friendsType, setFriendsType] = useState<'friends' | 'followers' | 'following'>('friends');
+  const [modalType, setModalType] = useState<FollowListType | null>(null);
   const [deleteAlert, setDeleteAlert] = useState<{ visible: boolean; list: UserList | null }>({
     visible: false, list: null,
   });
@@ -203,11 +204,6 @@ export default function ProfileScreen({ navigation }: any) {
     }
   };
 
-  const friendsCount =
-    friendsType === 'friends' ? user.friends_count :
-    friendsType === 'followers' ? user.followers_count :
-    user.following_count;
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
@@ -258,7 +254,7 @@ export default function ProfileScreen({ navigation }: any) {
                   {i > 0 && <View style={styles.followDivider} />}
                   <TouchableOpacity
                     style={styles.followCell}
-                    onPress={() => { setFriendsType(type); setShowFriendsModal(true); }}
+                    onPress={() => setModalType(type)}
                     activeOpacity={0.7}
                   >
                     <Text style={styles.followNum}>{count.toLocaleString()}</Text>
@@ -448,30 +444,22 @@ export default function ProfileScreen({ navigation }: any) {
         </Pressable>
       </Modal>
 
-      {/* Friends Modal */}
-      <Modal visible={showFriendsModal} transparent animationType="fade" onRequestClose={() => setShowFriendsModal(false)}>
-        <Pressable style={styles.friendsOverlay} onPress={() => setShowFriendsModal(false)}>
-          <Pressable style={styles.friendsCard} onPress={() => {}}>
-            <View style={styles.friendsHeader}>
-              <Text style={styles.friendsTitle}>
-                {friendsType.charAt(0).toUpperCase() + friendsType.slice(1)}
-              </Text>
-              <TouchableOpacity onPress={() => setShowFriendsModal(false)} activeOpacity={0.7}>
-                <Text style={styles.friendsCloseBtn}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.friendsBody}>
-              <Text style={styles.emptyFriendsIcon}>👥</Text>
-              <Text style={styles.emptyFriendsText}>
-                {friendsType === 'friends' ? 'No friends yet' :
-                 friendsType === 'followers' ? 'No followers yet' :
-                 'Not following anyone yet'}
-              </Text>
-              <Text style={styles.emptyFriendsCount}>{friendsCount} {friendsType}</Text>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {modalType && (
+        <FollowListModal
+          visible={modalType !== null}
+          type={modalType}
+          load={() => {
+            if (modalType === 'friends')   return followsService.getMyFriends();
+            if (modalType === 'followers') return followsService.getMyFollowers();
+            if (modalType === 'following') return followsService.getMyFollowing();
+            return Promise.resolve([]);
+          }}
+          onClose={() => setModalType(null)}
+          onUserPress={(otherUserId) => {
+            navigation.navigate('UserProfile', { userId: otherUserId });
+          }}
+        />
+      )}
     </View>
   );
 }

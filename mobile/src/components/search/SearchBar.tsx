@@ -6,7 +6,7 @@ import {
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/fonts';
 
-export type SearchTab = 'all' | 'media' | 'cast';
+export type SearchTab = 'all' | 'media' | 'cast' | 'users';
 
 interface SearchBarProps {
   query: string;
@@ -20,9 +20,10 @@ interface SearchBarProps {
 }
 
 const TABS: { key: SearchTab; label: string; emoji: string }[] = [
-  { key: 'all', label: 'All', emoji: '🔍' },
+  { key: 'all',   label: 'All',   emoji: '🔍' },
   { key: 'media', label: 'Media', emoji: '🎬' },
-  { key: 'cast', label: 'Cast', emoji: '🎭' },
+  { key: 'cast',  label: 'Cast',  emoji: '🎭' },
+  { key: 'users', label: 'Users', emoji: '👥' },
 ];
 
 export const SearchBar: React.FC<SearchBarProps> = ({
@@ -39,6 +40,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 
   return (
     <View style={styles.wrapper}>
+      {/* ── Input row ── */}
       <View style={styles.inputRow}>
         <TouchableOpacity
           style={[styles.inputWrap, isActive && styles.inputWrapActive]}
@@ -71,6 +73,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         )}
       </View>
 
+      {/* ── Tabs ── */}
       {isActive && (
         <View style={styles.tabs}>
           {TABS.map(tab => {
@@ -150,6 +153,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,175,204,0.15)',
     borderColor: COLORS.pink,
   },
-  tabText: { fontFamily: FONTS.regular,  fontSize: 12, color: COLORS.gray },
+  tabText:       { fontFamily: FONTS.regular,  fontSize: 12, color: COLORS.gray },
   tabTextActive: { fontFamily: FONTS.medium,   fontSize: 12, color: COLORS.pink },
 });

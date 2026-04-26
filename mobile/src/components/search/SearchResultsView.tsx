@@ -8,15 +8,17 @@ import { FONTS } from '../../constants/fonts';
 import { POSTER_SIZES } from '../../constants/tmdb';
 import { SearchTab } from './SearchBar';
 
+// ── Layout (3 cols — як в Recommendations) ────────────────────────────────────
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const MAX_WIDTH = 480;
-const CONTENT_W = Math.min(SCREEN_WIDTH, MAX_WIDTH);
-const COLS = 3;
-const CARD_GAP = 10;
-const SIDE_PAD = 16;
-const CARD_W = (CONTENT_W - SIDE_PAD * 2 - CARD_GAP * (COLS - 1)) / COLS;
-const CARD_H = CARD_W * 1.5;
+const MAX_WIDTH  = 480;
+const CONTENT_W  = Math.min(SCREEN_WIDTH, MAX_WIDTH);
+const COLS       = 3;
+const CARD_GAP   = 10;
+const SIDE_PAD   = 16;
+const CARD_W     = (CONTENT_W - SIDE_PAD * 2 - CARD_GAP * (COLS - 1)) / COLS;
+const CARD_H     = CARD_W * 1.5;
 
+// ── Types ─────────────────────────────────────────────────────────────────────
 export interface MediaResult {
   id: number;
   mediaType: 'movie' | 'tv';
@@ -34,15 +36,27 @@ export interface CastResult {
   knownFor: string;
 }
 
+export interface UserResult {
+  id: number;
+  username: string;
+  fullName: string;
+  profileImageUrl: string | null;
+  moviesWatched: number;
+  seriesWatched: number;
+  isFollowedByMe: boolean;
+}
+
 interface SearchResultsViewProps {
   tab: SearchTab;
   isLoading: boolean;
   mediaResults: MediaResult[];
   castResults: CastResult[];
+  userResults: UserResult[];
   query: string;
   navigation?: any;
 }
 
+// ── Media card ────────────────────────────────────────────────────────────────
 const MediaCard: React.FC<{
   item: MediaResult;
   index: number;
@@ -83,6 +97,7 @@ const MediaCard: React.FC<{
   );
 };
 
+// ── Cast card ─────────────────────────────────────────────────────────────────
 const CastCard: React.FC<{
   item: CastResult;
   index: number;
@@ -119,11 +134,55 @@ const CastCard: React.FC<{
   );
 };
 
+// ── User card ─────────────────────────────────────────────────────────────────
+const UserCard: React.FC<{
+  item: UserResult;
+  onPress: () => void;
+}> = ({ item, onPress }) => {
+
+  return (
+    <TouchableOpacity style={styles.userCard} activeOpacity={0.7} onPress={onPress}>
+      <View style={styles.userAvatar}>
+        {item.profileImageUrl ? (
+          <Image source={{ uri: item.profileImageUrl }} style={styles.userAvatarImg} />
+        ) : (
+          <View style={styles.userAvatarPlaceholder}>
+            <Text style={styles.userAvatarEmoji}>👤</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.userInfo}>
+        <View style={styles.userTopRow}>
+          <Text style={styles.userUsername} numberOfLines={1}>
+            @{item.username}
+          </Text>
+          {item.isFollowedByMe && (
+            <View style={styles.followingBadge}>
+              <Text style={styles.followingBadgeText}>Following</Text>
+            </View>
+          )}
+        </View>
+        {item.fullName.length > 0 && (
+          <Text style={styles.userFullName} numberOfLines={1}>{item.fullName}</Text>
+        )}
+        <Text style={styles.userStats}>
+          🎬 {item.moviesWatched}  ·  📺 {item.seriesWatched}
+        </Text>
+      </View>
+
+      <Text style={styles.userChevron}>›</Text>
+    </TouchableOpacity>
+  );
+};
+
+// ── Main component ────────────────────────────────────────────────────────────
 export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
   tab,
   isLoading,
   mediaResults,
   castResults,
+  userResults,
   query,
   navigation,
 }) => {
@@ -138,11 +197,13 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
   }
 
   const showMedia = tab === 'all' || tab === 'media';
-  const showCast = tab === 'all' || tab === 'cast';
+  const showCast  = tab === 'all' || tab === 'cast';
+  const showUsers = tab === 'all' || tab === 'users';
 
   const hasMedia = mediaResults.length > 0;
-  const hasCast = castResults.length > 0;
-  const hasAny = hasMedia || hasCast;
+  const hasCast  = castResults.length > 0;
+  const hasUsers = userResults.length > 0;
+  const hasAny   = hasMedia || hasCast || hasUsers;
 
   if (!hasAny) {
     return (
@@ -196,7 +257,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
           )}
 
           {showCast && hasCast && (
-            <View style={showMedia && hasMedia ? styles.castSection : undefined}>
+            <View style={showMedia && hasMedia ? styles.nextSection : undefined}>
 
               {tab === 'all' && (
                 <Text style={styles.sectionTitle}>
@@ -231,6 +292,33 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
             </View>
           )}
 
+          {showUsers && hasUsers && (
+            <View style={(showMedia && hasMedia) || (showCast && hasCast) ? styles.nextSection : undefined}>
+
+              {tab === 'all' && (
+                <Text style={styles.sectionTitle}>
+                  👥 Users
+                  <Text style={styles.sectionCount}> {userResults.length}</Text>
+                </Text>
+              )}
+
+              <View style={styles.usersList}>
+                {userResults.map(item => (
+                  <UserCard
+                    key={`user-${item.id}`}
+                    item={item}
+                    onPress={() => {
+                      if (navigation) {
+                        navigation.navigate('UserProfile', { userId: item.id });
+                      }
+                    }}
+                  />
+                ))}
+              </View>
+
+            </View>
+          )}
+
           <View style={{ height: 80 }} />
         </>
       }
@@ -240,6 +328,7 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
   );
 };
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   center: {
     flex: 1,
@@ -287,7 +376,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  castSection: { marginTop: 8 },
+  nextSection: { marginTop: 8 },
 
   grid: { paddingHorizontal: SIDE_PAD },
   row: { marginBottom: CARD_GAP },
@@ -374,5 +463,89 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: COLORS.cardTextLight,
     marginTop: 2,
+  },
+
+  // ── User card styles ────────────────────────────────────────────────────────
+  usersList: {
+    paddingHorizontal: SIDE_PAD,
+  },
+
+  userCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: '#2a2a2a',
+    marginBottom: 8,
+    gap: 12,
+  },
+
+  userAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: COLORS.gold,
+  },
+
+  userAvatarImg: { width: '100%', height: '100%' },
+
+  userAvatarPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.cardDark,
+  },
+
+  userAvatarEmoji: { fontSize: 22 },
+
+  userInfo: { flex: 1, gap: 2 },
+
+  userTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  userUsername: {
+    fontFamily: FONTS.semiBold,
+    fontSize: 14,
+    color: COLORS.pink,
+    flexShrink: 1,
+  },
+
+  followingBadge: {
+    backgroundColor: 'rgba(255,215,0,0.15)',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+
+  followingBadgeText: {
+    fontFamily: FONTS.medium,
+    fontSize: 9,
+    color: COLORS.gold,
+  },
+
+  userFullName: {
+    fontFamily: FONTS.regular,
+    fontSize: 12,
+    color: COLORS.white,
+  },
+
+  userStats: {
+    fontFamily: FONTS.regular,
+    fontSize: 11,
+    color: COLORS.cardTextLight,
+  },
+
+  userChevron: {
+    fontSize: 24,
+    color: COLORS.cardTextLight,
+    paddingHorizontal: 4,
   },
 });

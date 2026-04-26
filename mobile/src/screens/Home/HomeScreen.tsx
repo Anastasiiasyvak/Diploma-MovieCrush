@@ -7,9 +7,10 @@ import { FONTS } from '../../constants/fonts';
 import { Header } from '../../components/ui/Header';
 import { Footer } from '../../components/ui/Footer';
 import { SearchBar, SearchTab } from '../../components/search/SearchBar';
-import { SearchResultsView, MediaResult, CastResult } from '../../components/search/SearchResultsView';
+import { SearchResultsView, MediaResult, CastResult, UserResult } from '../../components/search/SearchResultsView';
 import { Section } from '../../components/MediaRow';
 import { tmdbService } from '../../services/tmdbService';
+import { followsService } from '../../services/followsService';
 import { Movie, TVSeries } from '../../types/tmdb.types';
 
 const searchMedia = async (query: string): Promise<MediaResult[]> => {
@@ -41,6 +42,19 @@ const searchCast = async (query: string): Promise<CastResult[]> => {
   }));
 };
 
+const searchAppUsers = async (query: string): Promise<UserResult[]> => {
+  const users = await followsService.searchUsers(query);
+  return users.map(u => ({
+    id: u.id,
+    username: u.username,
+    fullName: [u.first_name, u.last_name].filter(Boolean).join(' '),
+    profileImageUrl: u.profile_image_url,
+    moviesWatched: u.movies_watched,
+    seriesWatched: u.series_watched,
+    isFollowedByMe: u.is_followed_by_me,
+  }));
+};
+
 export default function HomeScreen({ navigation }: any) {
   const [trendingMovies, setTrendingMovies] = useState<Movie[]>([]);
   const [trendingSeries, setTrendingSeries] = useState<TVSeries[]>([]);
@@ -55,6 +69,7 @@ export default function HomeScreen({ navigation }: any) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [mediaResults, setMediaResults] = useState<MediaResult[]>([]);
   const [castResults, setCastResults] = useState<CastResult[]>([]);
+  const [userResults, setUserResults] = useState<UserResult[]>([]);
   const [hasResults, setHasResults] = useState(false);
 
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -86,6 +101,7 @@ export default function HomeScreen({ navigation }: any) {
     if (!q.trim()) {
       setMediaResults([]);
       setCastResults([]);
+      setUserResults([]);
       setHasResults(false);
       return;
     }
@@ -93,17 +109,29 @@ export default function HomeScreen({ navigation }: any) {
     setHasResults(true);
     try {
       if (tab === 'all') {
-        const [media, cast] = await Promise.all([searchMedia(q), searchCast(q)]);
+        const [media, cast, users] = await Promise.all([
+          searchMedia(q),
+          searchCast(q),
+          searchAppUsers(q),
+        ]);
         setMediaResults(media);
         setCastResults(cast);
+        setUserResults(users);
       } else if (tab === 'media') {
         const media = await searchMedia(q);
         setMediaResults(media);
         setCastResults([]);
-      } else {
+        setUserResults([]);
+      } else if (tab === 'cast') {
         const cast = await searchCast(q);
         setCastResults(cast);
         setMediaResults([]);
+        setUserResults([]);
+      } else {
+        const users = await searchAppUsers(q);
+        setUserResults(users);
+        setMediaResults([]);
+        setCastResults([]);
       }
     } catch (e) {
       console.error('Search error:', e);
@@ -123,6 +151,7 @@ export default function HomeScreen({ navigation }: any) {
     } else {
       setMediaResults([]);
       setCastResults([]);
+      setUserResults([]);
       setHasResults(false);
     }
   }, [searchTab, runSearch]);
@@ -140,6 +169,7 @@ export default function HomeScreen({ navigation }: any) {
     setHasResults(false);
     setMediaResults([]);
     setCastResults([]);
+    setUserResults([]);
     if (searchDebounce.current) clearTimeout(searchDebounce.current);
   };
 
@@ -148,6 +178,7 @@ export default function HomeScreen({ navigation }: any) {
     setHasResults(false);
     setMediaResults([]);
     setCastResults([]);
+    setUserResults([]);
   };
 
   const handleTabPress = (tab: 'home' | 'recommendations' | 'challenges') => {
@@ -179,7 +210,7 @@ export default function HomeScreen({ navigation }: any) {
               <View style={styles.searchHint}>
                 <Text style={styles.hintTitle}>Search MovieCrush</Text>
                 <Text style={styles.hintText}>
-                  Find movies, series, anime,{'\n'}cartoons and cast & crew
+                  Find movies, series, cast,{'\n'}and people who love cinema
                 </Text>
               </View>
             ) : (
@@ -188,6 +219,7 @@ export default function HomeScreen({ navigation }: any) {
                 isLoading={searchLoading}
                 mediaResults={mediaResults}
                 castResults={castResults}
+                userResults={userResults}
                 query={searchQuery}
                 navigation={navigation}
               />
