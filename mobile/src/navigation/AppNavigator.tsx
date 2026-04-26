@@ -16,6 +16,7 @@ import PersonScreen from '../screens/Person/PersonScreen';
 import MovieScreen from '../screens/Movie/MovieScreen';
 import SeriesScreen from '../screens/Series/SeriesScreen';
 import EpisodeScreen from '../screens/Episode/EpisodeScreen';
+import SoulmateScreen from '../screens/Soulmate/SoulmateScreen';
 
 const Stack = createStackNavigator();
 
@@ -46,6 +47,8 @@ export default function AppNavigator() {
         <Stack.Screen name="Movie"          component={MovieScreen} />
         <Stack.Screen name="Series"         component={SeriesScreen} />
         <Stack.Screen name="Episode"        component={EpisodeScreen} />
+
+        <Stack.Screen name="Soulmate" component={SoulmateScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
