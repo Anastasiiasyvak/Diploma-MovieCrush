@@ -3,8 +3,10 @@ import { View, Text, ScrollView } from 'react-native';
 import { Logo } from '../../components/ui/Logo';
 import { SoulmateCard } from '../../components/soulmate/SoulmateCard';
 import { styles } from './ChallengesScreen.styles';
+import { WrappedCard } from '../../components/wrapped/WrappedCard';
 
 const SOULMATE_DEV_PREVIEW = process.env['EXPO_PUBLIC_SOULMATE_DEV_PREVIEW'] === 'true';
+const WRAPPED_DEV_PREVIEW = process.env['EXPO_PUBLIC_WRAPPED_DEV_PREVIEW'] === 'true';
 
 export default function ChallengesScreen({ navigation }: any) {
   return (
@@ -21,7 +23,9 @@ export default function ChallengesScreen({ navigation }: any) {
           {SOULMATE_DEV_PREVIEW && (
             <SoulmateCard onPress={() => navigation.navigate('Soulmate')} />
           )}
-
+          {WRAPPED_DEV_PREVIEW && (
+            <WrappedCard onPress={() => navigation.navigate('Wrapped')} />
+          )}
           <View style={styles.placeholder}>
             <Text style={styles.emoji}>🏆</Text>
             <Text style={styles.title}>More challenges coming soon</Text>
