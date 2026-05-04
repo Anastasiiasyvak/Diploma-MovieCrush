@@ -11,6 +11,8 @@ import movieRoutes    from './modules/movies/movie.routes';
 import tmdbRoutes     from './modules/tmdb/tmdb.routes';
 import followsRoutes  from './modules/follows/follows.routes';
 import soulmateRoutes from './modules/soulmate/soulmate.routes';
+import recommendationsRoutes from './modules/recommendations/recommendations.routes';
+
 
 const app = express();
 
@@ -39,4 +41,6 @@ app.use('/api',          movieRoutes);
 app.use('/api/tmdb',     tmdbRoutes);
 app.use('/api/follows',  followsRoutes);
 app.use('/api/soulmate', soulmateRoutes);
+app.use('/api/recommendations', recommendationsRoutes);
+
 export default app;

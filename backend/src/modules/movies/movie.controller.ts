@@ -9,6 +9,7 @@ import {
   getBestActorVote, upsertBestActorVote,
   resetAllRatings,
 } from './movie.service';
+import { cacheMediaIfNeeded } from '../tmdb_cache/tmdb_cache.service';
 
 export const getActions = async (req: AuthRequest, res: Response) => {
   try {
@@ -26,7 +27,10 @@ export const toggleAction = async (req: AuthRequest, res: Response) => {
   try {
     const { tmdb_id, action, media_type } = req.body;
     if (!tmdb_id || !action) { res.status(400).json({ error: 'tmdb_id and action required' }); return; }
-    const data = await toggleMovieAction(req.userId!, { tmdb_id, action, media_type: media_type ?? 'movie' });
+    const finalMediaType = media_type ?? 'movie';
+    const data = await toggleMovieAction(req.userId!, { tmdb_id, action, media_type: finalMediaType });
+    cacheMediaIfNeeded(tmdb_id, finalMediaType).catch(() => {});
+
     res.json(data);
   } catch (err) {
     console.error('toggleAction error:', err);
@@ -61,7 +65,10 @@ export const addToList = async (req: AuthRequest, res: Response) => {
   try {
     const { list_id, tmdb_id, media_type } = req.body;
     if (!list_id || !tmdb_id) { res.status(400).json({ error: 'list_id and tmdb_id required' }); return; }
-    await addToCustomList(req.userId!, { list_id, tmdb_id, media_type: media_type ?? 'movie' });
+    const finalMediaType = media_type ?? 'movie';
+    await addToCustomList(req.userId!, { list_id, tmdb_id, media_type: finalMediaType });
+    cacheMediaIfNeeded(tmdb_id, finalMediaType).catch(() => {});
+
     res.status(201).json({ message: 'Added to list' });
   } catch (err: any) {
     if (err.message === 'List not found or not yours') { res.status(404).json({ error: err.message }); return; }
@@ -102,11 +109,15 @@ export const getMyRating = async (req: AuthRequest, res: Response) => {
 
 export const saveRating = async (req: AuthRequest, res: Response) => {
   try {
-    const { tmdb_id, overall_rating, director_score, effects_score, script_score, music_score, acting_score } = req.body;
+    const { tmdb_id, overall_rating, director_score, effects_score, script_score, music_score, acting_score, media_type } = req.body;
     if (!tmdb_id) { res.status(400).json({ error: 'tmdb_id required' }); return; }
     const data = await upsertRating(req.userId!, {
       tmdb_id, overall_rating, director_score, effects_score, script_score, music_score, acting_score,
     });
+    if (tmdb_id < 100000000) {
+      cacheMediaIfNeeded(tmdb_id, media_type ?? 'movie').catch(() => {});
+    }
+
     res.json(data);
   } catch (err) {
     console.error('saveRating error:', err);
@@ -128,9 +139,14 @@ export const getMyMood = async (req: AuthRequest, res: Response) => {
 
 export const saveMood = async (req: AuthRequest, res: Response) => {
   try {
-    const { tmdb_id, mood } = req.body;
+    const { tmdb_id, mood, media_type } = req.body;
     if (!tmdb_id || !mood) { res.status(400).json({ error: 'tmdb_id and mood required' }); return; }
     const saved = await upsertMood(req.userId!, { tmdb_id, mood });
+
+    if (tmdb_id < 100000000) {
+      cacheMediaIfNeeded(tmdb_id, media_type ?? 'movie').catch(() => {});
+    }
+
     res.json({ mood: saved });
   } catch (err) {
     console.error('saveMood error:', err);
@@ -219,9 +235,14 @@ export const getMyBestActor = async (req: AuthRequest, res: Response) => {
 
 export const voteBestActor = async (req: AuthRequest, res: Response) => {
   try {
-    const { tmdb_id, actor_tmdb_id, actor_name } = req.body;
+    const { tmdb_id, actor_tmdb_id, actor_name, media_type } = req.body;
     if (!tmdb_id || !actor_tmdb_id || !actor_name) { res.status(400).json({ error: 'tmdb_id, actor_tmdb_id and actor_name required' }); return; }
     const data = await upsertBestActorVote(req.userId!, { tmdb_id, actor_tmdb_id, actor_name });
+
+    if (tmdb_id < 100000000) {
+      cacheMediaIfNeeded(tmdb_id, media_type ?? 'movie').catch(() => {});
+    }
+
     res.json(data);
   } catch (err) {
     console.error('voteBestActor error:', err);

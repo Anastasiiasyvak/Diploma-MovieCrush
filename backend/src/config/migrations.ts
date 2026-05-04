@@ -65,16 +65,6 @@ const createTables = async () => {
     `);
     console.log('is_private column ready');
 
-    // await pool.query(`DROP TABLE IF EXISTS comment_likes CASCADE;`);
-    // await pool.query(`DROP TABLE IF EXISTS comments CASCADE;`);
-    // await pool.query(`DROP TABLE IF EXISTS user_best_actor_votes CASCADE;`);
-    // await pool.query(`DROP TABLE IF EXISTS user_movie_moods CASCADE;`);
-    // await pool.query(`DROP TABLE IF EXISTS user_detailed_ratings CASCADE;`);
-    // await pool.query(`DROP TABLE IF EXISTS user_movie_actions CASCADE;`);
-    // await pool.query(`DROP TABLE IF EXISTS list_items CASCADE;`);
-    // await pool.query(`DROP TABLE IF EXISTS user_yearly_stats CASCADE;`);
-    // console.log('Old new tables dropped');
-
     await pool.query(`
       CREATE TABLE IF NOT EXISTS list_items (
         id         BIGSERIAL PRIMARY KEY,
@@ -256,23 +246,111 @@ const createTables = async () => {
     `);
     console.log('Table user_soulmate_matches ready');
 
+    // у мене ця таблиця заповнюється під час дії юзера (наприклад, коли він позначає фільм як 'watched' або ставить рейтинг)
+    // і потім використовується для обрахунку аналітики в Wrapped, щоб не робити багато запитів до TMDB API в момент генерації Wrapped
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tmdb_media_cache (
+        tmdb_id BIGINT NOT NULL,
+        media_type VARCHAR(5) NOT NULL CHECK (media_type IN ('movie', 'tv')),
+        title VARCHAR(255),
+        release_year INT,
+        runtime_minutes INT,
+        episode_runtime_minutes INT,
+        poster_path VARCHAR(255),
+        genre_ids INT[] DEFAULT '{}',
+        director_tmdb_id INT,
+        director_name VARCHAR(100),
+        top_cast JSONB DEFAULT '[]',
+        cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (tmdb_id, media_type)
+      );
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_tmdb_cache_director
+        ON tmdb_media_cache(director_tmdb_id);
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_tmdb_cache_release_year
+        ON tmdb_media_cache(release_year);
+    `);
+    console.log('Table tmdb_media_cache ready');
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_wrapped_summary (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        wrapped_year INT NOT NULL,
+        total_minutes INT DEFAULT 0,
+        total_hours INT DEFAULT 0,
+        total_days DECIMAL(5,1) DEFAULT 0,
+        avg_release_year DECIMAL(6,1),
+        cinema_age INT,
+        movies_count INT DEFAULT 0,
+        series_count INT DEFAULT 0,
+        episodes_count INT DEFAULT 0,
+        top_genre_id INT,
+        top_genre_name VARCHAR(50),
+        top_director_id INT,
+        top_director_name VARCHAR(100),
+        top_actors JSONB DEFAULT '[]',
+        top_movie_tmdb_id BIGINT,
+        top_movie_title VARCHAR(255),
+        top_movie_poster VARCHAR(255),
+        top_movie_rating SMALLINT,
+        top_mood VARCHAR(20),
+        mood_count INT DEFAULT 0,
+        top_weekday SMALLINT,
+        top_hour SMALLINT,
+        top_month SMALLINT,
+        topfan_actor_id INT,
+        topfan_actor_name VARCHAR(100),
+        topfan_minutes INT DEFAULT 0,
+        topfan_percentile DECIMAL(5,2),
+        computed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (user_id, wrapped_year)
+      );
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_wrapped_user_year
+        ON user_wrapped_summary(user_id, wrapped_year);
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_wrapped_year_computed
+        ON user_wrapped_summary(wrapped_year, computed_at);
+    `);
+    console.log('Table user_wrapped_summary ready');
+
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_ai_recommendations (
+        id           BIGSERIAL PRIMARY KEY,
+        user_id      BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        recommendations JSONB NOT NULL,
+        model_used   VARCHAR(50) NOT NULL,
+        watched_count INT NOT NULL,
+        created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at   TIMESTAMP NOT NULL
+      );
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_ai_recs_user_expires
+        ON user_ai_recommendations(user_id, expires_at DESC);
+    `);
+    console.log('Table user_ai_recommendations ready');
+
     console.log('Converting tmdb_id columns to BIGINT...');
-    
+
     await pool.query(`ALTER TABLE list_items ALTER COLUMN tmdb_id TYPE BIGINT;`);
-    
     await pool.query(`ALTER TABLE user_movie_actions ALTER COLUMN tmdb_id TYPE BIGINT;`);
-    
     await pool.query(`ALTER TABLE user_detailed_ratings ALTER COLUMN tmdb_id TYPE BIGINT;`);
-    
     await pool.query(`ALTER TABLE user_movie_moods ALTER COLUMN tmdb_id TYPE BIGINT;`);
-    
     await pool.query(`ALTER TABLE comments ALTER COLUMN tmdb_id TYPE BIGINT;`);
-    
     await pool.query(`ALTER TABLE user_best_actor_votes ALTER COLUMN tmdb_id TYPE BIGINT;`);
 
     console.log('All tmdb_id columns successfully converted to BIGINT');
     console.log('All tables created successfully');
-    
+
   } catch (err) {
     console.error('Migration error:', err);
   } finally {
