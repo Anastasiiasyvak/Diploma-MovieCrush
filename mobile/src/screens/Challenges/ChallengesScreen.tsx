@@ -1,39 +1,36 @@
 import React from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
-import { COLORS } from '../../constants/colors';
-import { FONTS } from '../../constants/fonts';
+import { View, Text, ScrollView } from 'react-native';
 import { Logo } from '../../components/ui/Logo';
+import { SoulmateCard } from '../../components/soulmate/SoulmateCard';
+import { styles } from './ChallengesScreen.styles';
 
-export default function ChallengesScreen() {
+const SOULMATE_DEV_PREVIEW = process.env['EXPO_PUBLIC_SOULMATE_DEV_PREVIEW'] === 'true';
+
+export default function ChallengesScreen({ navigation }: any) {
   return (
     <View style={styles.container}>
       <View style={styles.centered}>
         <View style={styles.header}>
           <Logo />
         </View>
-        <View style={styles.body}>
-          <Text style={styles.emoji}>🏆</Text>
-          <Text style={styles.title}>Challenges & Analytics</Text>
-          <Text style={styles.subtitle}>Coming soon...</Text>
-        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {SOULMATE_DEV_PREVIEW && (
+            <SoulmateCard onPress={() => navigation.navigate('Soulmate')} />
+          )}
+
+          <View style={styles.placeholder}>
+            <Text style={styles.emoji}>🏆</Text>
+            <Text style={styles.title}>More challenges coming soon</Text>
+            <Text style={styles.subtitle}>
+              Yearly stats, achievements, and more.
+            </Text>
+          </View>
+        </ScrollView>
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  centered:  { flex: 1, width: '100%', maxWidth: 480, alignSelf: 'center' },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 56 : 36,
-    paddingBottom: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.cardDark,
-    alignItems: 'center',
-  },
-  body:     { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  emoji:    { fontSize: 56 },
-  title:    { fontFamily: FONTS.semiBold, fontSize: 20, color: COLORS.white },
-  subtitle: { fontFamily: FONTS.regular,  fontSize: 14, color: COLORS.darkGray },
-});
