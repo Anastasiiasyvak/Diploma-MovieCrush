@@ -6,13 +6,16 @@ dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 
-pool.query('SELECT NOW()', (err) => {
-  if (err) {
+const start = async () => {
+  try {
+    await pool.query('SELECT NOW()');
+    app.listen(PORT, () => {
+      console.log(`MovieCrush server running on port ${PORT}`);
+    });
+  } catch (err) {
     console.error('Failed to connect to database:', err);
     process.exit(1);
   }
-  
-  app.listen(PORT, () => {
-    console.log(`MovieCrush server running on port ${PORT}`);
-  });
-});
+};
+
+start();

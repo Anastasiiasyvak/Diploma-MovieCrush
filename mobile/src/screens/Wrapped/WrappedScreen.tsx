@@ -1,14 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
-  StatusBar, Image, Alert,
+  StatusBar, Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
 import { Logo } from '../../components/ui/Logo';
 import { wrappedService, WrappedSummary } from '../../services/wrappedService';
-import { POSTER_SIZES } from '../../constants/tmdb';
 import { styles } from './WrappedScreen.styles';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -133,7 +132,6 @@ export default function WrappedScreen({ navigation }: any) {
     const parts: string[] = [];
     if (habits.weekday !== null) parts.push(WEEKDAYS[habits.weekday]);
     if (habits.hour !== null) parts.push(`${habits.hour}:00`);
-    if (habits.month !== null) parts.push(MONTHS[habits.month]);
     return parts;
   })();
 
@@ -170,18 +168,11 @@ export default function WrappedScreen({ navigation }: any) {
             </Text>
           </Slide>
 
-          {/* Slide 3: Cinema age */}
-          {data.cinema_age !== null && (
-            <Slide colors={['#5E60CE', '#7400B8']} title="Your cinema age">
-              <Text style={styles.bigNumber}>
-                {data.cinema_age}<Text style={styles.bigNumberSuffix}> years old</Text>
-              </Text>
-              <Text style={styles.bigSubtext}>
-                The average release year of films you watched is {Math.round(data.avg_release_year ?? 0)}.
-                {data.cinema_age > 30 ? ' You love the classics 🎞️' :
-                 data.cinema_age > 15 ? ' You appreciate the past decade 📽️' :
-                 ' You\'re all about the new stuff 🆕'}
-              </Text>
+          {/* Slide 3: Cinema vibe */}
+          {data.cinema_vibe && (
+            <Slide colors={['#5E60CE', '#7400B8']} title="Your cinema vibe">
+              <Text style={styles.topName}>{data.cinema_vibe}</Text>
+              <Text style={styles.bigSubtext}>{data.cinema_vibe_stat}</Text>
             </Slide>
           )}
 
@@ -241,27 +232,6 @@ export default function WrappedScreen({ navigation }: any) {
             </Slide>
           )}
 
-          {/* Slide 8: Top movie */}
-          {data.top_movie && (
-            <Slide colors={['#FFD700', '#FF8C00']} title="Movie of your year">
-              <View style={styles.topMovieRow}>
-                {data.top_movie.poster_path ? (
-                  <Image
-                    source={{ uri: `${POSTER_SIZES.medium}${data.top_movie.poster_path}` }}
-                    style={styles.topMoviePoster}
-                  />
-                ) : (
-                  <View style={styles.topMoviePoster} />
-                )}
-                <View style={styles.topMovieInfo}>
-                  <Text style={styles.topMovieTitle} numberOfLines={3}>{data.top_movie.title}</Text>
-                  <Text style={styles.topMovieRating}>⭐ {data.top_movie.overall_rating}/10</Text>
-                  <Text style={styles.topMovieRatingLabel}>your rating</Text>
-                </View>
-              </View>
-            </Slide>
-          )}
-
           {/* Slide 10: Mood */}
           {data.top_mood && (
             <Slide colors={['#06D6A0', '#5E60CE']} title="Your dominant mood">
@@ -282,7 +252,7 @@ export default function WrappedScreen({ navigation }: any) {
                 {habitsLine.join(' · ')}
               </Text>
               <Text style={styles.topSubtitle}>
-                When you most often press "Watched" 🍿
+                When you most often watch movies 🍿
               </Text>
             </Slide>
           )}
@@ -291,10 +261,12 @@ export default function WrappedScreen({ navigation }: any) {
           {data.top_fan && (
             <Slide colors={['#FF006E', '#FFBE0B']} title="Top fan badge">
               <Text style={styles.topName}>{data.top_fan.actor_name}</Text>
-              <Text style={styles.topFanLine}>
-                You spent <Text style={styles.topFanHighlight}>{data.top_fan.minutes} minutes</Text>
-                {' '}with their films this year.
-              </Text>
+              {data.top_fan.minutes > 0 && (
+                <Text style={styles.topFanLine}>
+                  You spent <Text style={styles.topFanHighlight}>{data.top_fan.minutes} minutes</Text>
+                  {' '}with their films this year.
+                </Text>
+              )}
               {data.top_fan.percentile !== null && (
                 <Text style={styles.topFanLine}>
                   You're in the

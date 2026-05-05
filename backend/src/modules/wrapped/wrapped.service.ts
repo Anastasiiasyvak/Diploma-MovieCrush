@@ -1,14 +1,3 @@
-// backend/src/modules/wrapped/wrapped.service.ts
-//
-// Обчислення MovieCrush Wrapped — річна аналітика юзера (Spotify-style).
-//
-// ПРИНЦИП РОБОТИ:
-//   1. Всі дані вже є в БД (включно з tmdb_media_cache, що заповнюється
-//      під час дій юзера).
-//   2. Виконуємо ~13 SQL-запитів, агрегуємо за рік.
-//   3. Зберігаємо результат у user_wrapped_summary з UNIQUE (user_id, year).
-//   4. Mobile читає вже обчислений summary — швидко.
-
 import pool from '../../config/database';
 import {
   BasicStats,
@@ -17,11 +6,9 @@ import {
   TopMoodResult,
   TopFanResult,
   WrappedTopActor,
-  WrappedTopMovie,
   WrappedWatchHabits,
 } from './wrapped.types';
 
-// ── Genre name lookup (TMDB IDs → name) ──────────────────────────────────
 const GENRE_NAMES: Record<number, string> = {
   28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy',
   80: 'Crime', 99: 'Documentary', 18: 'Drama', 10751: 'Family',
@@ -33,13 +20,15 @@ const GENRE_NAMES: Record<number, string> = {
   10767: 'Talk', 10768: 'War & Politics',
 };
 
-// ── Slide computations ────────────────────────────────────────────────────
+const safeInt = (v: unknown): number => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
 
 const computeBasicStats = async (userId: number, year: number): Promise<BasicStats> => {
   const result = await pool.query(
     `SELECT
-       COALESCE(SUM(c.runtime_minutes), 0)::int  AS total_minutes,
-       AVG(c.release_year)                       AS avg_release_year,
+       COALESCE(SUM(c.runtime_minutes) FILTER (WHERE c.media_type = 'movie'), 0)::int AS total_minutes,       
        COUNT(*) FILTER (WHERE c.media_type = 'movie')::int AS movies_count,
        COUNT(*) FILTER (WHERE c.media_type = 'tv')::int    AS series_count
      FROM list_items li
@@ -51,38 +40,85 @@ const computeBasicStats = async (userId: number, year: number): Promise<BasicSta
        AND EXTRACT(YEAR FROM li.added_at) = $2`,
     [userId, year]
   );
+
+  const episodeMinutesResult = await pool.query(
+    `SELECT COALESCE(SUM(c.runtime_minutes), 0)::int AS episode_minutes
+     FROM user_episode_watches ew
+     JOIN tmdb_media_cache c
+          ON c.tmdb_id = ew.series_tmdb_id AND c.media_type = 'tv'
+     WHERE ew.user_id = $1
+       AND EXTRACT(YEAR FROM ew.watched_at) = $2`,
+    [userId, year]
+  );
+
+  const decadeResult = await pool.query(
+    `SELECT (FLOOR(c.release_year / 10) * 10)::int AS decade, COUNT(*)::int AS cnt
+     FROM list_items li
+     JOIN user_lists ul ON ul.id = li.list_id
+     JOIN tmdb_media_cache c ON c.tmdb_id = li.tmdb_id AND c.media_type = li.media_type
+     WHERE ul.user_id = $1
+       AND ul.list_type = 'watched'
+       AND EXTRACT(YEAR FROM li.added_at) = $2
+       AND c.release_year IS NOT NULL
+     GROUP BY decade
+     ORDER BY cnt DESC`,
+    [userId, year]
+  );
+
   const row = result.rows[0];
-  const totalMin = Number(row.total_minutes) || 0;
-  const avgYear = row.avg_release_year ? Number(row.avg_release_year) : null;
+  const episodeMinutes = Number(episodeMinutesResult.rows[0]?.episode_minutes) || 0;
+  const totalMin = (Number(row.total_minutes) || 0) + episodeMinutes;
+
+  const decades = decadeResult.rows as { decade: number; cnt: number }[];
+  const totalDecadeCount = decades.reduce((s, d) => s + d.cnt, 0);
+
+  let cinema_vibe: string | null = null;
+  let cinema_vibe_stat: string | null = null;
+
+  if (decades.length > 0 && totalDecadeCount > 0) {
+    const top = decades[0];
+    const topPct = Math.round((top.cnt / totalDecadeCount) * 100);
+    const decadesWithTenPct = decades.filter(d => (d.cnt / totalDecadeCount) >= 0.10).length;
+    const classicCount = decades.filter(d => d.decade < 2000).reduce((s, d) => s + d.cnt, 0);
+    const classicPct = Math.round((classicCount / totalDecadeCount) * 100);
+
+    if (topPct >= 60 && top.decade >= 2020) {
+      cinema_vibe = 'Modern Watcher 🆕';
+      cinema_vibe_stat = `${topPct}% of your watches were from the 2020s. You love the now.`;
+    } else if (decadesWithTenPct >= 3) {
+      cinema_vibe = 'Time Traveler 🕰️';
+      cinema_vibe_stat = `You watch across ${decadesWithTenPct} different decades. No era is off limits.`;
+    } else if (classicPct >= 30) {
+      cinema_vibe = 'Classic Soul 🎞️';
+      cinema_vibe_stat = `${classicPct}% of your watches were pre-2000. You appreciate the golden era.`;
+    } else {
+      cinema_vibe = 'Decade Surfer 🏄';
+      cinema_vibe_stat = `Your top decade is the ${top.decade}s - but you travel easily across eras.`;
+    }
+  }
 
   return {
     total_minutes:    totalMin,
     total_hours:      Math.round(totalMin / 60),
     total_days:       Number((totalMin / 60 / 24).toFixed(1)),
-    avg_release_year: avgYear,
-    cinema_age:       avgYear ? Math.round(year - avgYear) : null,
+    cinema_vibe,
+    cinema_vibe_stat,
     movies_count:     Number(row.movies_count) || 0,
     series_count:     Number(row.series_count) || 0,
   };
 };
 
 const computeEpisodesCount = async (userId: number, year: number): Promise<number> => {
-  // У нас episodes ratings зберігаються через композитний tmdb_id у
-  // user_detailed_ratings. Лічимо як кількість таких записів за рік.
   const result = await pool.query(
     `SELECT COUNT(*)::int AS cnt
-     FROM user_detailed_ratings
-     WHERE user_id = $1
-       AND tmdb_id > 100000000
-       AND EXTRACT(YEAR FROM created_at) = $2`,
+     FROM user_episode_watches
+     WHERE user_id = $1 AND EXTRACT(YEAR FROM watched_at) = $2`,
     [userId, year]
   );
   return Number(result.rows[0]?.cnt) || 0;
 };
 
 const computeTopGenre = async (userId: number, year: number): Promise<TopGenreResult> => {
-  // CROSS JOIN LATERAL UNNEST йде В FROM-блоці, не після WHERE.
-  // Так "розгортаємо" genre_ids array у окремі рядки і групуємо.
   const result = await pool.query(
     `SELECT g.genre_id, COUNT(*)::int AS cnt
      FROM list_items li
@@ -149,37 +185,6 @@ const computeTopActors = async (userId: number, year: number): Promise<WrappedTo
   }));
 };
 
-const computeTopMovie = async (userId: number, year: number): Promise<WrappedTopMovie | null> => {
-  const result = await pool.query(
-    `SELECT
-       udr.tmdb_id,
-       udr.overall_rating,
-       c.title,
-       c.poster_path,
-       (SELECT EXISTS (
-         SELECT 1 FROM user_movie_actions
-         WHERE user_id = udr.user_id AND tmdb_id = udr.tmdb_id AND is_favorite = TRUE
-       )) AS is_favorite
-     FROM user_detailed_ratings udr
-     LEFT JOIN tmdb_media_cache c
-       ON c.tmdb_id = udr.tmdb_id AND c.media_type = 'movie'
-     WHERE udr.user_id = $1
-       AND EXTRACT(YEAR FROM udr.created_at) = $2
-       AND udr.overall_rating IS NOT NULL
-     ORDER BY is_favorite DESC, udr.overall_rating DESC, udr.created_at DESC
-     LIMIT 1`,
-    [userId, year]
-  );
-  const row = result.rows[0];
-  if (!row) return null;
-  return {
-    tmdb_id:        Number(row.tmdb_id),
-    title:          row.title ?? 'Unknown',
-    poster_path:    row.poster_path ?? null,
-    overall_rating: Number(row.overall_rating),
-  };
-};
-
 const computeTopMood = async (userId: number, year: number): Promise<TopMoodResult> => {
   const result = await pool.query(
     `SELECT mood, COUNT(*)::int AS cnt
@@ -205,21 +210,24 @@ const computeWatchHabits = async (userId: number, year: number): Promise<Wrapped
        WHERE ul.user_id = $1
          AND ul.list_type = 'watched'
          AND EXTRACT(YEAR FROM li.added_at) = $2
+     ),
+     sessions AS (
+       SELECT DISTINCT ON (DATE_TRUNC('hour', added_at))
+         added_at
+       FROM watched_times
+       ORDER BY DATE_TRUNC('hour', added_at), added_at
      )
      SELECT
-       (SELECT EXTRACT(DOW FROM added_at)::int FROM watched_times
+       (SELECT EXTRACT(DOW FROM added_at)::int FROM sessions
         GROUP BY EXTRACT(DOW FROM added_at) ORDER BY COUNT(*) DESC LIMIT 1) AS top_weekday,
-       (SELECT EXTRACT(HOUR FROM added_at)::int FROM watched_times
-        GROUP BY EXTRACT(HOUR FROM added_at) ORDER BY COUNT(*) DESC LIMIT 1) AS top_hour,
-       (SELECT EXTRACT(MONTH FROM added_at)::int FROM watched_times
-        GROUP BY EXTRACT(MONTH FROM added_at) ORDER BY COUNT(*) DESC LIMIT 1) AS top_month`,
+       (SELECT EXTRACT(HOUR FROM added_at)::int FROM sessions
+        GROUP BY EXTRACT(HOUR FROM added_at) ORDER BY COUNT(*) DESC LIMIT 1) AS top_hour`,
     [userId, year]
   );
   const row = result.rows[0];
   return {
     weekday: row?.top_weekday !== null && row?.top_weekday !== undefined ? Number(row.top_weekday) : null,
     hour:    row?.top_hour    !== null && row?.top_hour    !== undefined ? Number(row.top_hour)    : null,
-    month:   row?.top_month   !== null && row?.top_month   !== undefined ? Number(row.top_month)   : null,
   };
 };
 
@@ -257,31 +265,19 @@ const computeTopFan = async (userId: number, year: number): Promise<TopFanResult
   );
   const myMinutes = Number(minutesResult.rows[0]?.minutes) || 0;
 
-  // Percentile: "ти серед топ X% фанатів цього актора".
   const percentileResult = await pool.query(
-    `WITH user_minutes AS (
-       SELECT
-         ul.user_id,
-         COALESCE(SUM(c.runtime_minutes), 0)::int AS minutes
-       FROM list_items li
-       JOIN user_lists ul ON ul.id = li.list_id
-       JOIN tmdb_media_cache c
-            ON c.tmdb_id = li.tmdb_id AND c.media_type = li.media_type
-       WHERE ul.list_type = 'watched'
-         AND EXTRACT(YEAR FROM li.added_at) = $1
-         AND c.top_cast @> $2::jsonb
-       GROUP BY ul.user_id
-     )
-     SELECT
-       (1 - PERCENT_RANK() OVER (ORDER BY minutes ASC))::numeric * 100 AS pct,
-       user_id
-     FROM user_minutes
-     WHERE user_id = $3
-     LIMIT 1`,
-    [year, JSON.stringify([{ tmdb_id: actorId }]), userId]
+    `SELECT
+       ROUND(
+         COUNT(DISTINCT user_id)::numeric
+         / NULLIF((SELECT COUNT(DISTINCT id) FROM users), 0) * 100,
+         1
+       ) AS pct
+     FROM user_best_actor_votes
+     WHERE actor_tmdb_id = $1`,
+    [actorId]
   );
   const percentile = percentileResult.rows[0]?.pct
-    ? Math.max(1, Math.round(Number(percentileResult.rows[0].pct) * 100) / 100)
+    ? Math.max(0.1, Number(percentileResult.rows[0].pct))
     : null;
 
   return {
@@ -292,14 +288,12 @@ const computeTopFan = async (userId: number, year: number): Promise<TopFanResult
   };
 };
 
-// ── Main: compute and persist ─────────────────────────────────────────────
-
 export const computeWrappedForUser = async (
   userId: number,
   year: number = new Date().getFullYear()
 ): Promise<void> => {
   const [
-    basics, episodes, topGenre, topDirector, topActors, topMovie,
+    basics, episodes, topGenre, topDirector, topActors,
     topMood, habits, topFan,
   ] = await Promise.all([
     computeBasicStats(userId, year),
@@ -307,7 +301,6 @@ export const computeWrappedForUser = async (
     computeTopGenre(userId, year),
     computeTopDirector(userId, year),
     computeTopActors(userId, year),
-    computeTopMovie(userId, year),
     computeTopMood(userId, year),
     computeWatchHabits(userId, year),
     computeTopFan(userId, year),
@@ -317,14 +310,13 @@ export const computeWrappedForUser = async (
     `INSERT INTO user_wrapped_summary (
        user_id, wrapped_year,
        total_minutes, total_hours, total_days,
-       avg_release_year, cinema_age,
+       cinema_vibe, cinema_vibe_stat,
        movies_count, series_count, episodes_count,
        top_genre_id, top_genre_name,
        top_director_id, top_director_name,
        top_actors,
-       top_movie_tmdb_id, top_movie_title, top_movie_poster, top_movie_rating,
        top_mood, mood_count,
-       top_weekday, top_hour, top_month,
+       top_weekday, top_hour,
        topfan_actor_id, topfan_actor_name, topfan_minutes, topfan_percentile
      ) VALUES (
        $1, $2,
@@ -334,17 +326,16 @@ export const computeWrappedForUser = async (
        $11, $12,
        $13, $14,
        $15::jsonb,
-       $16, $17, $18, $19,
-       $20, $21,
-       $22, $23, $24,
-       $25, $26, $27, $28
+       $16, $17,
+       $18, $19,
+       $20, $21, $22, $23
      )
      ON CONFLICT (user_id, wrapped_year) DO UPDATE SET
        total_minutes      = EXCLUDED.total_minutes,
        total_hours        = EXCLUDED.total_hours,
        total_days         = EXCLUDED.total_days,
-       avg_release_year   = EXCLUDED.avg_release_year,
-       cinema_age         = EXCLUDED.cinema_age,
+       cinema_vibe        = EXCLUDED.cinema_vibe,
+       cinema_vibe_stat   = EXCLUDED.cinema_vibe_stat,
        movies_count       = EXCLUDED.movies_count,
        series_count       = EXCLUDED.series_count,
        episodes_count     = EXCLUDED.episodes_count,
@@ -353,15 +344,10 @@ export const computeWrappedForUser = async (
        top_director_id    = EXCLUDED.top_director_id,
        top_director_name  = EXCLUDED.top_director_name,
        top_actors         = EXCLUDED.top_actors,
-       top_movie_tmdb_id  = EXCLUDED.top_movie_tmdb_id,
-       top_movie_title    = EXCLUDED.top_movie_title,
-       top_movie_poster   = EXCLUDED.top_movie_poster,
-       top_movie_rating   = EXCLUDED.top_movie_rating,
        top_mood           = EXCLUDED.top_mood,
        mood_count         = EXCLUDED.mood_count,
        top_weekday        = EXCLUDED.top_weekday,
        top_hour           = EXCLUDED.top_hour,
-       top_month          = EXCLUDED.top_month,
        topfan_actor_id    = EXCLUDED.topfan_actor_id,
        topfan_actor_name  = EXCLUDED.topfan_actor_name,
        topfan_minutes     = EXCLUDED.topfan_minutes,
@@ -370,15 +356,13 @@ export const computeWrappedForUser = async (
     [
       userId, year,
       basics.total_minutes, basics.total_hours, basics.total_days,
-      basics.avg_release_year, basics.cinema_age,
+      basics.cinema_vibe, basics.cinema_vibe_stat,
       basics.movies_count, basics.series_count, episodes,
       topGenre.top_genre_id, topGenre.top_genre_name,
       topDirector.top_director_id, topDirector.top_director_name,
       JSON.stringify(topActors),
-      topMovie?.tmdb_id ?? null, topMovie?.title ?? null,
-      topMovie?.poster_path ?? null, topMovie?.overall_rating ?? null,
       topMood.top_mood, topMood.mood_count,
-      habits.weekday, habits.hour, habits.month,
+      habits.weekday, habits.hour,
       topFan.topfan_actor_id, topFan.topfan_actor_name,
       topFan.topfan_minutes, topFan.topfan_percentile,
     ]

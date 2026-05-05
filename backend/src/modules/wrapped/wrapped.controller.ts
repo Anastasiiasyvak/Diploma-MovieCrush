@@ -1,10 +1,7 @@
-// backend/src/modules/wrapped/wrapped.controller.ts
-
 import { Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.middleware';
 import { computeWrappedForUser, getWrappedSummary } from './wrapped.service';
 
-/** Format raw DB row as nice JSON for mobile */
 const formatResponse = (row: any) => ({
   wrapped_year: Number(row.wrapped_year),
   computed_at:  row.computed_at,
@@ -13,8 +10,8 @@ const formatResponse = (row: any) => ({
   total_hours:   Number(row.total_hours)   || 0,
   total_days:    Number(row.total_days)    || 0,
 
-  avg_release_year: row.avg_release_year !== null ? Number(row.avg_release_year) : null,
-  cinema_age:       row.cinema_age       !== null ? Number(row.cinema_age)       : null,
+  cinema_vibe: row.cinema_vibe ?? null,
+  cinema_vibe_stat: row.cinema_vibe_stat ?? null,
 
   movies_count:   Number(row.movies_count)   || 0,
   series_count:   Number(row.series_count)   || 0,
@@ -32,13 +29,6 @@ const formatResponse = (row: any) => ({
 
   top_actors: row.top_actors || [],
 
-  top_movie: row.top_movie_tmdb_id ? {
-    tmdb_id: Number(row.top_movie_tmdb_id),
-    title:   row.top_movie_title,
-    poster_path: row.top_movie_poster,
-    overall_rating: Number(row.top_movie_rating) || 0,
-  } : null,
-
   top_mood: row.top_mood ? {
     mood: row.top_mood,
     count: Number(row.mood_count) || 0,
@@ -47,7 +37,6 @@ const formatResponse = (row: any) => ({
   watch_habits: {
     weekday: row.top_weekday !== null ? Number(row.top_weekday) : null,
     hour:    row.top_hour    !== null ? Number(row.top_hour)    : null,
-    month:   row.top_month   !== null ? Number(row.top_month)   : null,
   },
 
   top_fan: row.topfan_actor_id ? {
@@ -58,7 +47,6 @@ const formatResponse = (row: any) => ({
   } : null,
 });
 
-/** GET /api/wrapped/me?year=2026 */
 export const getMyWrapped = async (req: AuthRequest, res: Response) => {
   try {
     const yearParam = req.query['year'] as string | undefined;
@@ -79,7 +67,6 @@ export const getMyWrapped = async (req: AuthRequest, res: Response) => {
   }
 };
 
-/** POST /api/wrapped/recompute — re-compute Wrapped for current user + year */
 export const recomputeMyWrapped = async (req: AuthRequest, res: Response) => {
   try {
     const year = new Date().getFullYear();

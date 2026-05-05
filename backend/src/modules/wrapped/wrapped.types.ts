@@ -1,10 +1,3 @@
-// backend/src/modules/wrapped/wrapped.types.ts
-//
-// Типи для модуля Wrapped — і для внутрішнього використання (computeXxx результати),
-// і для відповіді API мобілці.
-
-// ── Sub-pieces ───────────────────────────────────────────────────────────
-
 export interface WrappedTopActor {
   tmdb_id: number;
   name:    string;
@@ -34,9 +27,8 @@ export interface WrappedTopMood {
 }
 
 export interface WrappedWatchHabits {
-  weekday: number | null;   // 0..6 (0 = Sunday)
-  hour:    number | null;   // 0..23
-  month:   number | null;   // 1..12
+  weekday: number | null;
+  hour:    number | null;    
 }
 
 export interface WrappedTopFan {
@@ -45,8 +37,6 @@ export interface WrappedTopFan {
   minutes:    number;
   percentile: number | null;
 }
-
-// ── Main response shape (повертається мобілці через /api/wrapped/me) ────
 
 export interface WrappedSummary {
   wrapped_year: number;
@@ -57,9 +47,9 @@ export interface WrappedSummary {
   total_hours:   number;
   total_days:    number;
 
-  // Slide 3: cinema age
-  avg_release_year: number | null;
-  cinema_age:       number | null;
+  // Slide 3: cinema vibe
+  cinema_vibe:      string | null;
+  cinema_vibe_stat: string | null;
 
   // Slide 4: counts
   movies_count:   number;
@@ -73,9 +63,6 @@ export interface WrappedSummary {
   // Slide 7: top 5 actors (з user_best_actor_votes)
   top_actors: WrappedTopActor[];
 
-  // Slide 8: top movie of the year
-  top_movie: WrappedTopMovie | null;
-
   // Slide 10: top mood
   top_mood: WrappedTopMood | null;
 
@@ -86,14 +73,12 @@ export interface WrappedSummary {
   top_fan: WrappedTopFan | null;
 }
 
-// ── Internal types для service.ts (між sub-functions) ────────────────────
-
 export interface BasicStats {
   total_minutes:    number;
   total_hours:      number;
   total_days:       number;
-  avg_release_year: number | null;
-  cinema_age:       number | null;
+  cinema_vibe:       string | null;
+  cinema_vibe_stat:  string | null;
   movies_count:     number;
   series_count:     number;
 }

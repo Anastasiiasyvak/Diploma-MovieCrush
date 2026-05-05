@@ -21,8 +21,8 @@ export interface WrappedSummary {
   total_hours: number;
   total_days: number;
 
-  avg_release_year: number | null;
-  cinema_age: number | null;
+  cinema_vibe: string | null;
+  cinema_vibe_stat: string | null;
 
   movies_count: number;
   series_count: number;
@@ -30,15 +30,13 @@ export interface WrappedSummary {
 
   top_genre: { id: number; name: string } | null;
   top_director: { id: number; name: string } | null;
-  top_actors: WrappedTopActor[];
-  top_movie: WrappedTopMovie | null;
+  top_actors: WrappedTopActor[];  
 
   top_mood: { mood: string; count: number } | null;
 
   watch_habits: {
     weekday: number | null;   
     hour: number | null;  
-    month: number | null;   
   };
 
   top_fan: {

@@ -311,6 +311,20 @@ const createTables = async () => {
         UNIQUE (user_id, wrapped_year)
       );
     `);
+
+    await pool.query(`
+      ALTER TABLE user_wrapped_summary
+        ADD COLUMN IF NOT EXISTS cinema_vibe VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS cinema_vibe_stat VARCHAR(200);
+    `);
+    console.log('Wrapped: cinema_vibe columns added');
+
+    await pool.query(`
+      ALTER TABLE user_wrapped_summary
+        DROP COLUMN IF EXISTS topfan_series_count;
+    `);
+    console.log('Wrapped: topfan_series_count removed');
+
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_wrapped_user_year
         ON user_wrapped_summary(user_id, wrapped_year);
