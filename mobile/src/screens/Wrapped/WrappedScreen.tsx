@@ -11,8 +11,6 @@ import { wrappedService, WrappedSummary } from '../../services/wrappedService';
 import { styles } from './WrappedScreen.styles';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const MONTHS = ['', 'January', 'February', 'March', 'April', 'May', 'June',
-                'July', 'August', 'September', 'October', 'November', 'December'];
 
 const MOOD_EMOJI: Record<string, string> = {
   happy: '😊', inspired: '✨', scared: '😱', sad: '😢',
@@ -51,6 +49,14 @@ const Slide: React.FC<{
 
 export default function WrappedScreen({ navigation }: any) {
   const [data, setData] = useState<WrappedSummary | null>(null);
+
+  const canRecompute = !data || (() => {
+    const computed = new Date(data.computed_at);
+    const now = new Date();
+    const diffHours = (now.getTime() - computed.getTime()) / (1000 * 60 * 60);
+    return diffHours >= 24;
+  })();
+  
   const [isLoading, setIsLoading] = useState(true);
   const [isComputing, setIsComputing] = useState(false);
 
@@ -282,7 +288,7 @@ export default function WrappedScreen({ navigation }: any) {
             <TouchableOpacity
               style={styles.recomputeBtn}
               onPress={handleRecompute}
-              disabled={isComputing}
+              disabled={isComputing || !canRecompute}
               activeOpacity={0.85}
             >
               {isComputing
@@ -291,6 +297,11 @@ export default function WrappedScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
 
+          <Text style={styles.recomputeHint}>
+            {canRecompute
+              ? 'MovieCrush Wrapped will be generated once a year. But now for testing, you can recompute once per day.'
+              : 'MovieCrush Wrapped will be generated once a year, but for testing, you can recompute once per day. But you\'ve already recomputed today. Come back tomorrow! 🎬'}
+          </Text>
           <View style={{ height: 40 }} />
         </View>
       </ScrollView>

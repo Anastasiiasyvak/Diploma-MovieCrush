@@ -20,9 +20,58 @@ const GENRE_NAMES: Record<number, string> = {
   10767: 'Talk', 10768: 'War & Politics',
 };
 
-const safeInt = (v: unknown): number => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
+export const determineCinemaVibe = (
+  decades: { decade: number; cnt: number }[]
+): { cinema_vibe: string | null; cinema_vibe_stat: string | null } => {
+  const totalDecadeCount = decades.reduce((s, d) => s + d.cnt, 0);
+
+  if (decades.length === 0 || totalDecadeCount === 0) {
+    return { cinema_vibe: null, cinema_vibe_stat: null };
+  }
+
+  const top = decades[0];
+  const topPct = Math.round((top.cnt / totalDecadeCount) * 100);
+  const decadesWithTenPct = decades.filter(d => (d.cnt / totalDecadeCount) >= 0.10).length;
+  const classicCount = decades.filter(d => d.decade < 2000).reduce((s, d) => s + d.cnt, 0);
+  const classicPct = Math.round((classicCount / totalDecadeCount) * 100);
+
+  if (topPct >= 60 && top.decade >= 2020) {
+    return {
+      cinema_vibe: 'Modern Watcher 🆕',
+      cinema_vibe_stat: `${topPct}% of your watches were from the 2020s. You love the now.`,
+    };
+  } else if (decadesWithTenPct >= 3) {
+    return {
+      cinema_vibe: 'Time Traveler 🕰️',
+      cinema_vibe_stat: `You watch across ${decadesWithTenPct} different decades. No era is off limits.`,
+    };
+  } else if (classicPct >= 30) {
+    return {
+      cinema_vibe: 'Classic Soul 🎞️',
+      cinema_vibe_stat: `${classicPct}% of your watches were pre-2000. You appreciate the golden era.`,
+    };
+  } else {
+    return {
+      cinema_vibe: 'Decade Surfer 🏄',
+      cinema_vibe_stat: `Your top decade is the ${top.decade}s - but you travel easily across eras.`,
+    };
+  }
+};
+
+export const calculateTimeStats = (totalMinutes: number): {
+  total_hours: number;
+  total_days: number;
+} => ({
+  total_hours: Math.round(totalMinutes / 60),
+  total_days:  Number((totalMinutes / 60 / 24).toFixed(1)),
+});
+
+export const calculateFanPercentile = (
+  fansCount: number,
+  totalUsers: number
+): number | null => {
+  if (totalUsers === 0) return null;
+  return Math.max(0.1, Math.round((fansCount / totalUsers) * 1000) / 10);
 };
 
 const computeBasicStats = async (userId: number, year: number): Promise<BasicStats> => {
@@ -68,39 +117,14 @@ const computeBasicStats = async (userId: number, year: number): Promise<BasicSta
   const row = result.rows[0];
   const episodeMinutes = Number(episodeMinutesResult.rows[0]?.episode_minutes) || 0;
   const totalMin = (Number(row.total_minutes) || 0) + episodeMinutes;
-
   const decades = decadeResult.rows as { decade: number; cnt: number }[];
-  const totalDecadeCount = decades.reduce((s, d) => s + d.cnt, 0);
-
-  let cinema_vibe: string | null = null;
-  let cinema_vibe_stat: string | null = null;
-
-  if (decades.length > 0 && totalDecadeCount > 0) {
-    const top = decades[0];
-    const topPct = Math.round((top.cnt / totalDecadeCount) * 100);
-    const decadesWithTenPct = decades.filter(d => (d.cnt / totalDecadeCount) >= 0.10).length;
-    const classicCount = decades.filter(d => d.decade < 2000).reduce((s, d) => s + d.cnt, 0);
-    const classicPct = Math.round((classicCount / totalDecadeCount) * 100);
-
-    if (topPct >= 60 && top.decade >= 2020) {
-      cinema_vibe = 'Modern Watcher 🆕';
-      cinema_vibe_stat = `${topPct}% of your watches were from the 2020s. You love the now.`;
-    } else if (decadesWithTenPct >= 3) {
-      cinema_vibe = 'Time Traveler 🕰️';
-      cinema_vibe_stat = `You watch across ${decadesWithTenPct} different decades. No era is off limits.`;
-    } else if (classicPct >= 30) {
-      cinema_vibe = 'Classic Soul 🎞️';
-      cinema_vibe_stat = `${classicPct}% of your watches were pre-2000. You appreciate the golden era.`;
-    } else {
-      cinema_vibe = 'Decade Surfer 🏄';
-      cinema_vibe_stat = `Your top decade is the ${top.decade}s - but you travel easily across eras.`;
-    }
-  }
+  const { cinema_vibe, cinema_vibe_stat } = determineCinemaVibe(decades);
+  const { total_hours, total_days } = calculateTimeStats(totalMin);
 
   return {
     total_minutes:    totalMin,
-    total_hours:      Math.round(totalMin / 60),
-    total_days:       Number((totalMin / 60 / 24).toFixed(1)),
+    total_hours,
+    total_days,
     cinema_vibe,
     cinema_vibe_stat,
     movies_count:     Number(row.movies_count) || 0,
@@ -259,6 +283,7 @@ const computeTopFan = async (userId: number, year: number): Promise<TopFanResult
           ON c.tmdb_id = li.tmdb_id AND c.media_type = li.media_type
      WHERE ul.user_id = $1
        AND ul.list_type = 'watched'
+       AND li.media_type = 'movie'
        AND EXTRACT(YEAR FROM li.added_at) = $2
        AND c.top_cast @> $3::jsonb`,
     [userId, year, JSON.stringify([{ tmdb_id: actorId }])]
@@ -267,18 +292,16 @@ const computeTopFan = async (userId: number, year: number): Promise<TopFanResult
 
   const percentileResult = await pool.query(
     `SELECT
-       ROUND(
-         COUNT(DISTINCT user_id)::numeric
-         / NULLIF((SELECT COUNT(DISTINCT id) FROM users), 0) * 100,
-         1
-       ) AS pct
+       COUNT(DISTINCT user_id)::int AS fans_count,
+       (SELECT COUNT(DISTINCT id)::int FROM users) AS total_users
      FROM user_best_actor_votes
      WHERE actor_tmdb_id = $1`,
     [actorId]
   );
-  const percentile = percentileResult.rows[0]?.pct
-    ? Math.max(0.1, Number(percentileResult.rows[0].pct))
-    : null;
+
+  const fansCount = Number(percentileResult.rows[0]?.fans_count) || 0;
+  const totalUsers = Number(percentileResult.rows[0]?.total_users) || 0;
+  const percentile = calculateFanPercentile(fansCount, totalUsers);
 
   return {
     topfan_actor_id:   actorId,
@@ -379,4 +402,4 @@ export const getWrappedSummary = async (
     [userId, year]
   );
   return result.rows[0] ?? null;
-}; 
+};

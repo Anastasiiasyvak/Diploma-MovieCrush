@@ -36,6 +36,9 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit
 
+      - name: Run unit tests
+        run: npm test
+
   mobile-check:
     name: Mobile · TypeScript check
     runs-on: ubuntu-latest

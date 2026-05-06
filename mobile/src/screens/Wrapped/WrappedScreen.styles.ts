@@ -237,4 +237,12 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.background,
   },
+
+  recomputeHint: {
+    color: COLORS.gray,
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 16,
+  },
 });
