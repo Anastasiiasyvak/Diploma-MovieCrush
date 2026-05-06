@@ -4,13 +4,6 @@ export interface WrappedTopActor {
   votes:   number;
 }
 
-export interface WrappedTopMovie {
-  tmdb_id:        number;
-  title:          string;
-  poster_path:    string | null;
-  overall_rating: number;
-}
-
 export interface WrappedTopGenre {
   id:   number;
   name: string;
@@ -42,34 +35,26 @@ export interface WrappedSummary {
   wrapped_year: number;
   computed_at:  string;
 
-  // Slide 2: total time
   total_minutes: number;
   total_hours:   number;
   total_days:    number;
 
-  // Slide 3: cinema vibe
   cinema_vibe:      string | null;
   cinema_vibe_stat: string | null;
 
-  // Slide 4: counts
   movies_count:   number;
   series_count:   number;
   episodes_count: number;
 
-  // Slides 5-6: top genre/director
   top_genre:    WrappedTopGenre    | null;
   top_director: WrappedTopDirector | null;
 
-  // Slide 7: top 5 actors (з user_best_actor_votes)
   top_actors: WrappedTopActor[];
 
-  // Slide 10: top mood
   top_mood: WrappedTopMood | null;
 
-  // Slide 11: watch habits
   watch_habits: WrappedWatchHabits;
 
-  // Slide 12: top fan
   top_fan: WrappedTopFan | null;
 }
 

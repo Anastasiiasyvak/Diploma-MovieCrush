@@ -7,8 +7,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
 import { Logo } from '../../components/ui/Logo';
-import { wrappedService, WrappedSummary } from '../../services/wrappedService';
+import { wrappedService } from '../../services/wrappedService';
 import { styles } from './WrappedScreen.styles';
+import { WrappedSummary } from '../../types/wrapped.types';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -48,7 +49,9 @@ const Slide: React.FC<{
 );
 
 export default function WrappedScreen({ navigation }: any) {
-  const [data, setData] = useState<WrappedSummary | null>(null);
+  const [data, setData] = useState<WrappedSummary | null>(null);  
+  const [isLoading, setIsLoading] = useState(true);
+  const [isComputing, setIsComputing] = useState(false);
 
   const canRecompute = !data || (() => {
     const computed = new Date(data.computed_at);
@@ -56,9 +59,6 @@ export default function WrappedScreen({ navigation }: any) {
     const diffHours = (now.getTime() - computed.getTime()) / (1000 * 60 * 60);
     return diffHours >= 24;
   })();
-  
-  const [isLoading, setIsLoading] = useState(true);
-  const [isComputing, setIsComputing] = useState(false);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -159,11 +159,11 @@ export default function WrappedScreen({ navigation }: any) {
             <View style={styles.headerSpacer} />
           </View>
 
-          {/* Slide 1: Intro */}
+          {/* Intro */}
           <Text style={styles.yearTitle}>{data.wrapped_year} Wrapped</Text>
           <Text style={styles.yearSubtitle}>Your year in cinema 🎬</Text>
 
-          {/* Slide 2: Total time */}
+          {/* Total time */}
           <Slide colors={['#FFAFCC', '#FFD700']} title="Time spent watching">
             <Text style={styles.bigNumber}>
               {data.total_hours}<Text style={styles.bigNumberSuffix}> hours</Text>
@@ -174,7 +174,7 @@ export default function WrappedScreen({ navigation }: any) {
             </Text>
           </Slide>
 
-          {/* Slide 3: Cinema vibe */}
+          {/* Cinema vibe */}
           {data.cinema_vibe && (
             <Slide colors={['#5E60CE', '#7400B8']} title="Your cinema vibe">
               <Text style={styles.topName}>{data.cinema_vibe}</Text>
@@ -182,7 +182,7 @@ export default function WrappedScreen({ navigation }: any) {
             </Slide>
           )}
 
-          {/* Slide 4: Counts */}
+          {/* Counts */}
           <Slide colors={['#06D6A0', '#118AB2']} title="What you watched">
             <View style={styles.countsRow}>
               <View style={styles.countCard}>
@@ -200,7 +200,7 @@ export default function WrappedScreen({ navigation }: any) {
             </View>
           </Slide>
 
-          {/* Slide 5: Top genre */}
+          {/* Top genre */}
           {data.top_genre && (
             <Slide colors={['#F72585', '#7209B7']} title="Your top genre">
               <Text style={styles.topName}>{data.top_genre.name}</Text>
@@ -210,7 +210,7 @@ export default function WrappedScreen({ navigation }: any) {
             </Slide>
           )}
 
-          {/* Slide 6: Top director */}
+          {/* Top director */}
           {data.top_director && (
             <Slide colors={['#3A0CA3', '#4361EE']} title="Your top director">
               <Text style={styles.topName}>{data.top_director.name}</Text>
@@ -220,7 +220,7 @@ export default function WrappedScreen({ navigation }: any) {
             </Slide>
           )}
 
-          {/* Slide 7: Top 5 actors */}
+          {/* Top 5 actors */}
           {data.top_actors.length > 0 && (
             <Slide colors={['#FF006E', '#FB5607']} title="Your top actors">
               <Text style={styles.topSubtitle}>
@@ -238,7 +238,7 @@ export default function WrappedScreen({ navigation }: any) {
             </Slide>
           )}
 
-          {/* Slide 10: Mood */}
+          {/* Mood */}
           {data.top_mood && (
             <Slide colors={['#06D6A0', '#5E60CE']} title="Your dominant mood">
               <Text style={styles.bigNumber}>
@@ -251,7 +251,7 @@ export default function WrappedScreen({ navigation }: any) {
             </Slide>
           )}
 
-          {/* Slide 11: Watch habits */}
+          {/* Watch habits */}
           {habitsLine.length > 0 && (
             <Slide colors={['#B5179E', '#560BAD']} title="Your cinema ritual">
               <Text style={styles.topName}>
@@ -263,7 +263,7 @@ export default function WrappedScreen({ navigation }: any) {
             </Slide>
           )}
 
-          {/* Slide 12: Top fan */}
+          {/* Top fan */}
           {data.top_fan && (
             <Slide colors={['#FF006E', '#FFBE0B']} title="Top fan badge">
               <Text style={styles.topName}>{data.top_fan.actor_name}</Text>
@@ -283,7 +283,7 @@ export default function WrappedScreen({ navigation }: any) {
             </Slide>
           )}
 
-          {/* Slide 13: Recompute (у мене воно прибереться, це я юзаю для тестування, бо якщо я дода нові фільми, хочу перезавантажити) */}
+          {/* Recompute */}
           <View style={styles.footerWrap}>
             <TouchableOpacity
               style={styles.recomputeBtn}
