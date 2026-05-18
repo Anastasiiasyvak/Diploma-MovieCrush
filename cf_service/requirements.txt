@@ -1,0 +1,19 @@
+# Web framework
+fastapi==0.115.0
+uvicorn==0.30.0
+
+# Database
+psycopg2-binary==2.9.9
+python-dotenv==1.0.0
+
+# ML core
+implicit==0.7.2
+numpy==1.26.4
+scipy==1.17.1
+
+# Evaluation (sklearn metrics + plotting)
+scikit-learn==1.5.2
+matplotlib==3.9.2
+
+# Progress bars (transitively required by implicit, але краще зафіксувати явно)
+tqdm==4.66.5
