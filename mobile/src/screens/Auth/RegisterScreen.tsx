@@ -100,7 +100,7 @@ export default function RegisterScreen({ navigation }: any) {
 
       if (response.accessToken && response.refreshToken) {
         await saveTokens(response.accessToken, response.refreshToken);
-        navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+        navigation.reset({ index: 0, routes: [{ name: 'Onboarding' }] });
       } else {
         navigation.replace('CheckEmail', { email: form.email.trim().toLowerCase() });
       }
