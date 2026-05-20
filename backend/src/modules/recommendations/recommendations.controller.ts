@@ -1,6 +1,37 @@
 import { Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.middleware';
 import { getAiRecommendationsForUser } from './recommendations.service';
+import { getColdStartRecommendations } from './cold_start_service';
+import pool from '../../config/database';
+
+const COLD_START_THRESHOLD = 20;
+
+const getWatchedCount = async (userId: number): Promise<number> => {
+  const res = await pool.query(
+    `SELECT COUNT(*) FROM user_movie_actions WHERE user_id = $1 AND is_watched = TRUE`,
+    [userId]
+  );
+  return Number(res.rows[0].count);
+};
+
+export const getRecommendations = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const seed = Number(req.query.seed ?? 0);
+    const watchedCount = await getWatchedCount(userId);
+
+    if (watchedCount < COLD_START_THRESHOLD) {
+      const data = await getColdStartRecommendations(userId, seed);
+      res.json(data);
+    } else {
+      const data = await getAiRecommendationsForUser(userId, false);
+      res.json(data);
+    }
+  } catch (err: any) {
+    console.error('getRecommendations error:', err);
+    res.status(500).json({ error: err?.message || 'Internal server error' });
+  }
+};
 
 export const getAiRecommendations = async (req: AuthRequest, res: Response) => {
   try {
@@ -8,7 +39,6 @@ export const getAiRecommendations = async (req: AuthRequest, res: Response) => {
     res.json(data);
   } catch (err: any) {
     console.error('getAiRecommendations error:', err);
-
     if (err?.message?.startsWith('No watched movies')) {
       res.status(400).json({ error: err.message });
       return;

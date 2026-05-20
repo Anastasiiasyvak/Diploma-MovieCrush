@@ -5,7 +5,8 @@ import * as ctrl from './recommendations.controller';
 const router = Router();
 router.use(authMiddleware);
 
-router.get('/ai', ctrl.getAiRecommendations);
+router.get('/', ctrl.getRecommendations);      
+router.get('/ai', ctrl.getAiRecommendations);   
 router.post('/ai/refresh', ctrl.refreshAiRecommendations);
 
 export default router;

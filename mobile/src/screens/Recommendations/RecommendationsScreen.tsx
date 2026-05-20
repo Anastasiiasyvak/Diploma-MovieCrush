@@ -11,10 +11,23 @@ import { Footer } from '../../components/ui/Footer';
 import { MovieGridCard } from '../../components/recommendations/MovieGridCard';
 import { DrawerContent } from '../../components/recommendations/DrawerContent';
 import { fetchRecommendations, DiscoverFilters } from '../../services/tmdbService';
-import { recommendationsService, AiRecommendation } from '../../services/recommendationsService';
+import {
+  recommendationsService,
+  AiRecommendation,
+  isColdStart,
+  MainRecsResponse,
+} from '../../services/recommendationsService';
 import { getRelevantGenres, DECADES, DEFAULT_FILTERS } from '../../constants/genres';
 import { MediaItem, ContentType, FilterState } from '../../types/tmdb.types';
 import { styles, CARD_W, CARD_H, DRAWER_WIDTH, COLS } from './RecommendationsScreen.styles';
+
+const isFiltersActive = (f: FilterState): boolean =>
+  f.contentTypes.length > 0 ||
+  f.genreIds.length > 0 ||
+  f.decades.length > 0 ||
+  f.countries.length > 0 ||
+  f.ratingMin > 1 ||
+  f.ratingMax < 10;
 
 const buildFiltersList = (f: FilterState): DiscoverFilters[] => {
   const types = f.contentTypes.length ? f.contentTypes : ['movie' as ContentType];
@@ -35,13 +48,35 @@ const buildFiltersList = (f: FilterState): DiscoverFilters[] => {
     originCountry: f.countries.length === 1 ? f.countries[0] : undefined,
     minRating: f.ratingMin > 1 ? f.ratingMin : undefined,
     maxRating: f.ratingMax < 10 ? f.ratingMax : undefined,
-    sortBy: 'popularity.desc',
   }));
+};
+
+const recsToMediaItems = (data: MainRecsResponse): MediaItem[] => {
+  if (isColdStart(data)) {
+    return data.recommendations.map(r => ({
+      id: r.tmdb_id,
+      mediaType: r.media_type,
+      title: r.title,
+      poster_path: r.poster_path,
+      vote_average: r.vote_average,
+      release_date: r.release_date,
+      overview: r.overview,
+    } as MediaItem));
+  }
+  return data.recommendations.map(r => ({
+    id: r.tmdb_id,
+    mediaType: r.media_type ?? 'movie',
+    title: r.title,
+    poster_path: r.poster_path,
+    vote_average: r.vote_average,
+    release_date: `${r.year}-01-01`,
+    overview: r.overview,
+  } as MediaItem));
 };
 
 const aiToMediaItem = (r: AiRecommendation): MediaItem => ({
   id: r.tmdb_id,
-  mediaType: 'movie',
+  mediaType: r.media_type ?? 'movie',
   title: r.title,
   poster_path: r.poster_path,
   vote_average: r.vote_average,
@@ -50,7 +85,6 @@ const aiToMediaItem = (r: AiRecommendation): MediaItem => ({
 } as MediaItem);
 
 export default function RecommendationsScreen({ navigation }: any) {
-  // звичайні реки
   const [movies, setMovies] = useState<MediaItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -59,8 +93,6 @@ export default function RecommendationsScreen({ navigation }: any) {
   const [pending, setPending] = useState<FilterState>(DEFAULT_FILTERS);
   const [seed, setSeed] = useState(0);
   const [activeTab, setActiveTab] = useState<'home' | 'recommendations' | 'challenges'>('recommendations');
-
-  //AI Assistant state 
   const [aiOpen, setAiOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiRefreshing, setAiRefreshing] = useState(false);
@@ -73,25 +105,35 @@ export default function RecommendationsScreen({ navigation }: any) {
   const drawerAnim = useRef(new Animated.Value(DRAWER_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const drawerScrollY = useRef(0);
+  const initialLoadDone = useRef(false);
 
   const loadMovies = useCallback(async (f: FilterState, s: number, isRefresh = false) => {
     isRefresh ? setIsRefreshing(true) : setIsLoading(true);
     try {
-      const filtersList = buildFiltersList(f);
-      const results = await Promise.all(filtersList.map(fl => fetchRecommendations(fl, s)));
+      let items: MediaItem[] = [];
 
-      const seen = new Set<string>();
-      const merged: MediaItem[] = [];
-      const maxLen = Math.max(...results.map(r => r.length));
-      for (let i = 0; i < maxLen; i++) {
-        for (const arr of results) {
-          if (arr[i]) {
-            const key = `${arr[i].mediaType}-${arr[i].id}`;
-            if (!seen.has(key)) { seen.add(key); merged.push(arr[i]); }
+      if (isFiltersActive(f)) {
+        const filtersList = buildFiltersList(f);
+        const results = await Promise.all(filtersList.map(fl => fetchRecommendations(fl, s)));
+
+        const seen = new Set<string>();
+        const merged: MediaItem[] = [];
+        const maxLen = Math.max(...results.map(r => r.length));
+        for (let i = 0; i < maxLen; i++) {
+          for (const arr of results) {
+            if (arr[i]) {
+              const key = `${arr[i].mediaType}-${arr[i].id}`;
+              if (!seen.has(key)) { seen.add(key); merged.push(arr[i]); }
+            }
           }
         }
+        items = merged.slice(0, 25);
+      } else {
+        const data = await recommendationsService.getMain(s);
+        items = recsToMediaItems(data);
       }
-      setMovies(merged.slice(0, 25));
+
+      setMovies(items);
     } catch (e) {
       console.error('Recommendations fetch error:', e);
     } finally {
@@ -100,7 +142,12 @@ export default function RecommendationsScreen({ navigation }: any) {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { loadMovies(filters, seed); }, []));
+  useFocusEffect(useCallback(() => {
+    if (!initialLoadDone.current) {
+      initialLoadDone.current = true;
+      loadMovies(filters, seed);
+    }
+  }, []));
 
   const openDrawer = () => {
     setPending(filters);
@@ -198,7 +245,7 @@ export default function RecommendationsScreen({ navigation }: any) {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.aiCtaTitle}>AI Assistant</Text>
-          <Text style={styles.aiCtaSubtitle}>Personalized picks based on your watched list</Text>
+          <Text style={styles.aiCtaSubtitle}>Personalized picks with reasoning</Text>
         </View>
         <Text style={styles.aiCtaArrow}>›</Text>
       </TouchableOpacity>
@@ -344,7 +391,11 @@ export default function RecommendationsScreen({ navigation }: any) {
                     activeOpacity={0.85}
                     onPress={() => {
                       setAiOpen(false);
-                      navigation.navigate('Movie', { movieId: rec.tmdb_id });
+                      if (rec.media_type === 'tv') {
+                        navigation.navigate('Series', { seriesId: rec.tmdb_id });
+                      } else {
+                        navigation.navigate('Movie', { movieId: rec.tmdb_id });
+                      }
                     }}
                   >
                     <MovieGridCard
@@ -354,7 +405,11 @@ export default function RecommendationsScreen({ navigation }: any) {
                       cardHeight={135}
                       onPress={() => {
                         setAiOpen(false);
-                        navigation.navigate('Movie', { movieId: rec.tmdb_id });
+                        if (rec.media_type === 'tv') {
+                          navigation.navigate('Series', { seriesId: rec.tmdb_id });
+                        } else {
+                          navigation.navigate('Movie', { movieId: rec.tmdb_id });
+                        }
                       }}
                     />
                     <View style={styles.aiRecBody}>
