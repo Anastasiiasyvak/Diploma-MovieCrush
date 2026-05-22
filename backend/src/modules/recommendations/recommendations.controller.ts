@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.middleware';
 import { getAiRecommendationsForUser } from './recommendations.service';
 import { getColdStartRecommendations } from './cold_start_service';
+import { getAlsRecommendations } from './als_service';
 import pool from '../../config/database';
 
 const COLD_START_THRESHOLD = 20;
@@ -24,7 +25,15 @@ export const getRecommendations = async (req: AuthRequest, res: Response) => {
       const data = await getColdStartRecommendations(userId, seed);
       res.json(data);
     } else {
-      const data = await getAiRecommendationsForUser(userId, false);
+      const data = await getAlsRecommendations(userId);
+
+      if (data.recommendations.length === 0) {
+        console.warn(`[Recs] ALS returned empty for user ${userId}, falling back to cold start`);
+        const fallback = await getColdStartRecommendations(userId, seed);
+        res.json(fallback);
+        return;
+      }
+
       res.json(data);
     }
   } catch (err: any) {

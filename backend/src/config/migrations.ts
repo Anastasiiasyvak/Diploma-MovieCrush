@@ -510,6 +510,10 @@ const createTables = async () => {
     `);
     console.log('Table user_onboarding ready');
 
+    await pool.query(`
+      ALTER TABLE tmdb_media_cache 
+        ADD COLUMN IF NOT EXISTS vote_average DECIMAL(4,2) DEFAULT 0,
+    `);
     console.log('All tables created successfully');
 
   } catch (err) {

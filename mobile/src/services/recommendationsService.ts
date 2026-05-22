@@ -37,10 +37,29 @@ export interface ColdStartResponse {
   watched_count: number;
 }
 
-export type MainRecsResponse = AiRecommendationsResponse | ColdStartResponse;
+export interface AlsItem {
+  tmdb_id: number;
+  media_type: 'movie' | 'tv';
+  title: string;
+  poster_path: string | null;
+  vote_average: number;
+  overview: string;
+  release_date: string;
+}
+
+export interface AlsResponse {
+  recommendations: AlsItem[];
+  strategy: 'als';
+  watched_count: number;
+}
+
+export type MainRecsResponse = AiRecommendationsResponse | ColdStartResponse | AlsResponse;
 
 export const isColdStart = (r: MainRecsResponse): r is ColdStartResponse =>
   (r as ColdStartResponse).strategy === 'cold_start';
+
+export const isAls = (r: MainRecsResponse): r is AlsResponse =>
+  (r as AlsResponse).strategy === 'als';
 
 export const recommendationsService = {
   getMain: async (seed = 0): Promise<MainRecsResponse> => {

@@ -14,7 +14,9 @@ import { fetchRecommendations, DiscoverFilters } from '../../services/tmdbServic
 import {
   recommendationsService,
   AiRecommendation,
+  AiRecommendationsResponse,
   isColdStart,
+  isAls,
   MainRecsResponse,
 } from '../../services/recommendationsService';
 import { getRelevantGenres, DECADES, DEFAULT_FILTERS } from '../../constants/genres';
@@ -52,7 +54,7 @@ const buildFiltersList = (f: FilterState): DiscoverFilters[] => {
 };
 
 const recsToMediaItems = (data: MainRecsResponse): MediaItem[] => {
-  if (isColdStart(data)) {
+  if (isColdStart(data) || isAls(data)) {
     return data.recommendations.map(r => ({
       id: r.tmdb_id,
       mediaType: r.media_type,
@@ -63,7 +65,7 @@ const recsToMediaItems = (data: MainRecsResponse): MediaItem[] => {
       overview: r.overview,
     } as MediaItem));
   }
-  return data.recommendations.map(r => ({
+  return (data as AiRecommendationsResponse).recommendations.map((r: AiRecommendation) => ({
     id: r.tmdb_id,
     mediaType: r.media_type ?? 'movie',
     title: r.title,
