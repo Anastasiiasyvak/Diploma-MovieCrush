@@ -84,7 +84,6 @@ export const removeFromList = async (req: AuthRequest, res: Response) => {
     if (isNaN(listId) || isNaN(tmdbId)) { res.status(400).json({ error: 'Invalid IDs' }); return; }
 
     const { list_type } = await removeFromCustomList(req.userId!, listId, tmdbId);
-
     const actions = await getMovieActions(req.userId!, tmdbId);
 
     res.json({ message: 'Removed from list', list_type, actions });
@@ -114,9 +113,7 @@ export const saveRating = async (req: AuthRequest, res: Response) => {
     const data = await upsertRating(req.userId!, {
       tmdb_id, overall_rating, director_score, effects_score, script_score, music_score, acting_score,
     });
-    if (tmdb_id < 100000000) {
-      cacheMediaIfNeeded(tmdb_id, media_type ?? 'movie').catch(() => {});
-    }
+    cacheMediaIfNeeded(tmdb_id, media_type ?? 'movie').catch(() => {});
 
     res.json(data);
   } catch (err) {
@@ -142,10 +139,7 @@ export const saveMood = async (req: AuthRequest, res: Response) => {
     const { tmdb_id, mood, media_type } = req.body;
     if (!tmdb_id || !mood) { res.status(400).json({ error: 'tmdb_id and mood required' }); return; }
     const saved = await upsertMood(req.userId!, { tmdb_id, mood });
-
-    if (tmdb_id < 100000000) {
-      cacheMediaIfNeeded(tmdb_id, media_type ?? 'movie').catch(() => {});
-    }
+    cacheMediaIfNeeded(tmdb_id, media_type ?? 'movie').catch(() => {});
 
     res.json({ mood: saved });
   } catch (err) {
@@ -238,10 +232,7 @@ export const voteBestActor = async (req: AuthRequest, res: Response) => {
     const { tmdb_id, actor_tmdb_id, actor_name, media_type } = req.body;
     if (!tmdb_id || !actor_tmdb_id || !actor_name) { res.status(400).json({ error: 'tmdb_id, actor_tmdb_id and actor_name required' }); return; }
     const data = await upsertBestActorVote(req.userId!, { tmdb_id, actor_tmdb_id, actor_name });
-
-    if (tmdb_id < 100000000) {
-      cacheMediaIfNeeded(tmdb_id, media_type ?? 'movie').catch(() => {});
-    }
+    cacheMediaIfNeeded(tmdb_id, media_type ?? 'movie').catch(() => {});
 
     res.json(data);
   } catch (err) {
