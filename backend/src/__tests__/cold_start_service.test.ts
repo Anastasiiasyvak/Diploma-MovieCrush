@@ -1,486 +1,310 @@
-type ContentBucket = 'movie' | 'tv' | 'anime' | 'anime_movie' | 'dorama' | 'animation';
+import {
+  getContentBucket,
+  getAllowedBucketsFiltered,
+  computeGenreWeights,
+  getLowRatedIds,
+  getTopGenreIds,
+  buildBatch,
+  passesLanguageGenreFilter,
+  type ColdStartItem,
+  type OnboardingMovie,
+  type ContentBucket,
+} from '../modules/recommendations/cold_start_service';
 
-interface OnboardingMovie {
-  tmdb_id: number;
-  genre: string;
-  media_type: 'movie' | 'tv';
-}
+const movie = (tmdb_id: number, genre: string): OnboardingMovie =>
+  ({ tmdb_id, genre, media_type: 'movie' });
 
-const getContentBucket = (m: OnboardingMovie): ContentBucket => {
-  const g = m.genre.toLowerCase();
-  if (m.media_type === 'tv') {
-    if (g === 'anime') return 'anime';
-    if (g === 'k-drama') return 'dorama';
-    return 'tv';
-  }
-  if (g === 'anime') return 'anime_movie';
-  if (g === 'animation') return 'animation';
-  return 'movie';
-};
+const series = (tmdb_id: number, genre: string): OnboardingMovie =>
+  ({ tmdb_id, genre, media_type: 'tv' });
 
-const getAllowedBuckets = (movies: OnboardingMovie[]): Set<ContentBucket> => {
-  const buckets = new Set<ContentBucket>();
-  for (const m of movies) buckets.add(getContentBucket(m));
-  return buckets;
-};
-
-const GENRE_TO_TMDB: Record<string, number[]> = {
-  'Drama': [18], 'Thriller': [53], 'Action': [28], 'Comedy': [35],
-  'Romance': [10749], 'Sci-Fi': [878], 'Horror': [27], 'Animation': [16],
-  'Anime': [16], 'Fantasy': [14], 'Crime': [80], 'Adventure': [12],
-  'Family': [10751], 'History': [36], 'Mystery': [9648], 'War': [10752],
-  'K-Drama': [18], 'Series': [18],
-};
-
-const computeGenreWeights = (
-  movies: OnboardingMovie[],
-  ratings: Record<string, number>,
-): Map<number, number> => {
-  const weights = new Map<number, number>();
-  for (const movie of movies) {
-    const rating = ratings[String(movie.tmdb_id)] ?? null;
-    const weight = rating !== null ? (rating >= 8 ? 3 : rating >= 6 ? 2 : 1) : 1;
-    for (const gId of GENRE_TO_TMDB[movie.genre] ?? []) {
-      weights.set(gId, (weights.get(gId) ?? 0) + weight);
-    }
-  }
-  return weights;
-};
-
-const getTopGenreIds = (weights: Map<number, number>, n: number): number[] =>
-  [...weights.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([id]) => id);
-
-interface ColdStartItem {
-  tmdb_id: number; media_type: 'movie' | 'tv'; title: string;
-  poster_path: string | null; vote_average: number; overview: string; release_date: string;
-}
-
-const makeItem = (id: number, title: string): ColdStartItem => ({
-  tmdb_id: id, media_type: 'movie', title,
-  poster_path: null, vote_average: 7, overview: '', release_date: '2020-01-01',
+const makeItem = (id: number, title = `Movie ${id}`): ColdStartItem => ({
+  tmdb_id: id,
+  media_type: 'movie',
+  title,
+  poster_path: null,
+  vote_average: 7,
+  overview: '',
+  release_date: '2020-01-01',
 });
 
-const buildBatch = (
-  byActors: ColdStartItem[], byGenres: ColdStartItem[],
-  byPopular: ColdStartItem[], excludedIds: Set<number>,
-  ACTOR_SLOTS = 10, GENRE_SLOTS = 10, POPULAR_SLOTS = 5, BATCH_SIZE = 25,
-): ColdStartItem[] => {
-  const seen = new Set<number>();
-  const result: ColdStartItem[] = [];
-  const addItems = (items: ColdStartItem[], limit: number) => {
-    let added = 0;
-    for (const item of items) {
-      if (added >= limit) break;
-      if (!seen.has(item.tmdb_id) && !excludedIds.has(item.tmdb_id)) {
-        seen.add(item.tmdb_id); result.push(item); added++;
-      }
-    }
-  };
-  addItems(byActors, ACTOR_SLOTS);
-  addItems(byGenres, GENRE_SLOTS);
-  addItems(byPopular, POPULAR_SLOTS);
-  if (result.length < BATCH_SIZE) {
-    addItems([...byGenres, ...byActors, ...byPopular], BATCH_SIZE - result.length);
-  }
-  return result;
-};
+const makeItems = (count: number, startId = 0): ColdStartItem[] =>
+  Array.from({ length: count }, (_, i) => makeItem(startId + i));
 
+const tmdbResult = (overrides: { original_language?: string; genre_ids?: number[] } = {}) =>
+  ({ id: 1, ...overrides }) as any;
+
+// getContentBucket
 
 describe('getContentBucket', () => {
-
-  describe('movie types', () => {
-    it('regular movie -> movie', () => {
-      expect(getContentBucket({ tmdb_id: 1, genre: 'Drama', media_type: 'movie' })).toBe('movie');
-    });
-
-    it('action movie -> movie', () => {
-      expect(getContentBucket({ tmdb_id: 2, genre: 'Action', media_type: 'movie' })).toBe('movie');
-    });
-
-    it('animation movie -> animation (not anime!)', () => {
-      expect(getContentBucket({ tmdb_id: 3, genre: 'Animation', media_type: 'movie' })).toBe('animation');
-    });
-
-    it('anime movie (Spirited Away) -> anime_movie', () => {
-      expect(getContentBucket({ tmdb_id: 129, genre: 'Anime', media_type: 'movie' })).toBe('anime_movie');
-    });
-
-    it('Your Name (anime movie) -> anime_movie', () => {
-      expect(getContentBucket({ tmdb_id: 372058, genre: 'Anime', media_type: 'movie' })).toBe('anime_movie');
-    });
+  it('regular drama movie -> movie', () => {
+    expect(getContentBucket(movie(1, 'Drama'))).toBe('movie');
   });
 
-  describe('tv types', () => {
-    it('regular series -> tv', () => {
-      expect(getContentBucket({ tmdb_id: 10, genre: 'Series', media_type: 'tv' })).toBe('tv');
-    });
-
-    it('Breaking Bad (Series) -> tv', () => {
-      expect(getContentBucket({ tmdb_id: 1396, genre: 'Series', media_type: 'tv' })).toBe('tv');
-    });
-
-    it('anime series -> anime (not animation!)', () => {
-      expect(getContentBucket({ tmdb_id: 20, genre: 'Anime', media_type: 'tv' })).toBe('anime');
-    });
-
-    it('K-Drama -> dorama', () => {
-      expect(getContentBucket({ tmdb_id: 30, genre: 'K-Drama', media_type: 'tv' })).toBe('dorama');
-    });
-
-    it('Business Proposal (K-Drama) -> dorama', () => {
-      expect(getContentBucket({ tmdb_id: 154825, genre: 'K-Drama', media_type: 'tv' })).toBe('dorama');
-    });
+  it('cartoon (Animation) -> animation, NOT anime', () => {
+    expect(getContentBucket(movie(3, 'Animation'))).toBe('animation');
   });
 
-  describe('case insensitive', () => {
-    it('lowercase anime -> anime_movie for movie', () => {
-      expect(getContentBucket({ tmdb_id: 1, genre: 'anime', media_type: 'movie' })).toBe('anime_movie');
-    });
+  it('anime movie -> anime_movie', () => {
+    expect(getContentBucket(movie(129, 'Anime'))).toBe('anime_movie');
+  });
 
-    it('lowercase k-drama -> dorama', () => {
-      expect(getContentBucket({ tmdb_id: 1, genre: 'k-drama', media_type: 'tv' })).toBe('dorama');
-    });
+  it('regular series -> tv', () => {
+    expect(getContentBucket(series(10, 'Series'))).toBe('tv');
+  });
+
+  it('anime series -> anime, NOT animation', () => {
+    expect(getContentBucket(series(20, 'Anime'))).toBe('anime');
+  });
+
+  it('K-Drama -> dorama', () => {
+    expect(getContentBucket(series(30, 'K-Drama'))).toBe('dorama');
+  });
+
+  it('is case-insensitive', () => {
+    expect(getContentBucket(movie(1, 'anime'))).toBe('anime_movie');
+    expect(getContentBucket(series(1, 'k-drama'))).toBe('dorama');
   });
 });
 
-// getAllowedBuckets
-
-describe('getAllowedBuckets', () => {
-
-  it('only anime movies -> only anime_movie, NO movie', () => {
-    const movies = [
-      { tmdb_id: 129, genre: 'Anime', media_type: 'movie' as const },
-      { tmdb_id: 372058, genre: 'Anime', media_type: 'movie' as const },
-    ];
-    const buckets = getAllowedBuckets(movies);
-    expect(buckets.has('anime_movie')).toBe(true);
-    expect(buckets.has('movie')).toBe(false);
-    expect(buckets.has('animation')).toBe(false);
-    expect(buckets.has('tv')).toBe(false);
-  });
-
-  it('only K-Drama -> only dorama, NO movie or tv', () => {
-    const movies = [
-      { tmdb_id: 154825, genre: 'K-Drama', media_type: 'tv' as const },
-      { tmdb_id: 117378, genre: 'K-Drama', media_type: 'tv' as const },
-    ];
-    const buckets = getAllowedBuckets(movies);
-    expect(buckets.has('dorama')).toBe(true);
-    expect(buckets.has('movie')).toBe(false);
-    expect(buckets.has('tv')).toBe(false);
-  });
-
-  it('only cartoons -> only animation, NO movie', () => {
-    const movies = [
-      { tmdb_id: 9806, genre: 'Animation', media_type: 'movie' as const },
-      { tmdb_id: 585, genre: 'Animation', media_type: 'movie' as const },
-    ];
-    const buckets = getAllowedBuckets(movies);
-    expect(buckets.has('animation')).toBe(true);
-    expect(buckets.has('movie')).toBe(false);
-    expect(buckets.has('anime_movie')).toBe(false);
-  });
-
-  it('only anime series -> only anime', () => {
-    const movies = [{ tmdb_id: 1, genre: 'Anime', media_type: 'tv' as const }];
-    const buckets = getAllowedBuckets(movies);
-    expect(buckets.has('anime')).toBe(true);
-    expect(buckets.has('anime_movie')).toBe(false);
-    expect(buckets.has('movie')).toBe(false);
-  });
-
-  it('movies + series -> movie and tv', () => {
-    const movies = [
-      { tmdb_id: 238, genre: 'Drama', media_type: 'movie' as const },
-      { tmdb_id: 1396, genre: 'Series', media_type: 'tv' as const },
-    ];
-    const buckets = getAllowedBuckets(movies);
-    expect(buckets.has('movie')).toBe(true);
-    expect(buckets.has('tv')).toBe(true);
-    expect(buckets.size).toBe(2);
-  });
-
-  it('anime + regular movies -> anime_movie and movie', () => {
-    const movies = [
-      { tmdb_id: 129, genre: 'Anime', media_type: 'movie' as const },
-      { tmdb_id: 238, genre: 'Drama', media_type: 'movie' as const },
-    ];
-    const buckets = getAllowedBuckets(movies);
-    expect(buckets.has('anime_movie')).toBe(true);
-    expect(buckets.has('movie')).toBe(true);
-    expect(buckets.has('animation')).toBe(false);
-  });
-
-  it('empty list -> empty set', () => {
-    const buckets = getAllowedBuckets([]);
-    expect(buckets.size).toBe(0);
-  });
-});
-
-// computeGenreWeights
+// computeGenreWeights (rating < 6 не враховується)
 
 describe('computeGenreWeights', () => {
-
   it('movie without rating -> weight 1', () => {
-    const movies = [{ tmdb_id: 1, genre: 'Drama', media_type: 'movie' as const }];
-    const weights = computeGenreWeights(movies, {});
-    expect(weights.get(18)).toBe(1);
+    expect(computeGenreWeights([movie(1, 'Drama')], {}).get(18)).toBe(1);
   });
 
   it('movie rated 8+ -> weight 3', () => {
-    const movies = [{ tmdb_id: 1, genre: 'Drama', media_type: 'movie' as const }];
-    const weights = computeGenreWeights(movies, { '1': 9 });
-    expect(weights.get(18)).toBe(3);
+    expect(computeGenreWeights([movie(1, 'Drama')], { '1': 9 }).get(18)).toBe(3);
   });
 
   it('movie rated 6-7 -> weight 2', () => {
-    const movies = [{ tmdb_id: 1, genre: 'Action', media_type: 'movie' as const }];
-    const weights = computeGenreWeights(movies, { '1': 7 });
-    expect(weights.get(28)).toBe(2);
+    expect(computeGenreWeights([movie(1, 'Action')], { '1': 7 }).get(28)).toBe(2);
   });
 
-  it('movie rated below 6 -> weight 1', () => {
-    const movies = [{ tmdb_id: 1, genre: 'Horror', media_type: 'movie' as const }];
-    const weights = computeGenreWeights(movies, { '1': 4 });
-    expect(weights.get(27)).toBe(1);
+  it('movie rated below 6 -> genre NOT counted at all', () => {
+    const weights = computeGenreWeights([movie(1, 'Horror')], { '1': 4 });
+    expect(weights.has(27)).toBe(false);
+    expect(weights.size).toBe(0);
   });
 
-  it('two movies same genre -> weights sum up', () => {
-    const movies = [
-      { tmdb_id: 1, genre: 'Drama', media_type: 'movie' as const },
-      { tmdb_id: 2, genre: 'Drama', media_type: 'movie' as const },
-    ];
-    const weights = computeGenreWeights(movies, { '1': 9, '2': 8 });
-    expect(weights.get(18)).toBe(6); // 3 + 3
+  it('mix: liked drama counts, disliked horror ignored', () => {
+    const movies = [movie(1, 'Drama'), movie(2, 'Horror')];
+    const weights = computeGenreWeights(movies, { '1': 9, '2': 2 });
+    expect(weights.get(18)).toBe(3);
+    expect(weights.has(27)).toBe(false);
   });
 
-  it('Drama dominates when all movies rated 9', () => {
-    const movies = [
-      { tmdb_id: 238, genre: 'Drama', media_type: 'movie' as const },
-      { tmdb_id: 13, genre: 'Drama', media_type: 'movie' as const },
-      { tmdb_id: 680, genre: 'Thriller', media_type: 'movie' as const },
-    ];
-    const weights = computeGenreWeights(movies, { '238': 9, '13': 9, '680': 6 });
-    expect(weights.get(18)!).toBeGreaterThan(weights.get(53)!);
+  it('two liked movies same genre -> weights sum', () => {
+    const movies = [movie(1, 'Drama'), movie(2, 'Drama')];
+    expect(computeGenreWeights(movies, { '1': 9, '2': 8 }).get(18)).toBe(6);
   });
 
   it('unknown genre -> ignored', () => {
-    const movies = [{ tmdb_id: 1, genre: 'Bollywood', media_type: 'movie' as const }];
-    const weights = computeGenreWeights(movies, {});
-    expect(weights.size).toBe(0);
+    expect(computeGenreWeights([movie(1, 'Bollywood')], {}).size).toBe(0);
+  });
+});
+
+
+describe('getAllowedBucketsFiltered', () => {
+  it('only liked anime movies -> only anime_movie', () => {
+    const movies = [movie(129, 'Anime'), movie(372058, 'Anime')];
+    const buckets = getAllowedBucketsFiltered(movies, { '129': 9, '372058': 8 });
+    expect([...buckets]).toEqual(['anime_movie']);
+  });
+
+  it('movies + series picked -> movie and tv only', () => {
+    const movies = [movie(238, 'Drama'), series(1396, 'Series')];
+    const buckets = getAllowedBucketsFiltered(movies, {});
+    expect(buckets.has('movie')).toBe(true);
+    expect(buckets.has('tv')).toBe(true);
+    expect(buckets.has('anime')).toBe(false);
+    expect(buckets.has('dorama')).toBe(false);
+    expect(buckets.size).toBe(2);
+  });
+
+  it('disliked anime (rating 1) does NOT open anime bucket', () => {
+    const movies = [movie(238, 'Drama'), movie(129, 'Anime')];
+    const buckets = getAllowedBucketsFiltered(movies, { '238': 9, '129': 1 });
+    expect(buckets.has('movie')).toBe(true);
+    expect(buckets.has('anime_movie')).toBe(false);
+  });
+
+  it('disliked dorama does NOT open dorama bucket', () => {
+    const movies = [series(1396, 'Series'), series(154825, 'K-Drama')];
+    const buckets = getAllowedBucketsFiltered(movies, { '1396': 8, '154825': 3 });
+    expect(buckets.has('tv')).toBe(true);
+    expect(buckets.has('dorama')).toBe(false);
+  });
+
+  it('unrated items still count (neutral)', () => {
+    const buckets = getAllowedBucketsFiltered([movie(1, 'Drama')], {});
+    expect(buckets.has('movie')).toBe(true);
+  });
+
+  it('empty list -> empty set', () => {
+    expect(getAllowedBucketsFiltered([], {}).size).toBe(0);
+  });
+});
+
+describe('getLowRatedIds', () => {
+  it('returns ids of titles rated below 6', () => {
+    const movies = [movie(1, 'Drama'), movie(2, 'Horror'), movie(3, 'Action')];
+    const ids = getLowRatedIds(movies, { '1': 9, '2': 3, '3': 5 });
+    expect(ids.sort()).toEqual([2, 3]);
+  });
+
+  it('unrated titles are NOT low-rated', () => {
+    expect(getLowRatedIds([movie(1, 'Drama')], {})).toEqual([]);
+  });
+
+  it('rating exactly 6 is NOT low-rated', () => {
+    expect(getLowRatedIds([movie(1, 'Drama')], { '1': 6 })).toEqual([]);
+  });
+
+  it('empty list -> empty array', () => {
+    expect(getLowRatedIds([], {})).toEqual([]);
   });
 });
 
 // getTopGenreIds
 
 describe('getTopGenreIds', () => {
-
-  it('returns top N genres sorted by weight', () => {
+  it('returns top N sorted by weight', () => {
     const weights = new Map([[18, 9], [28, 6], [53, 3], [35, 1]]);
-    const top = getTopGenreIds(weights, 2);
-    expect(top).toEqual([18, 28]);
+    expect(getTopGenreIds(weights, 2)).toEqual([18, 28]);
   });
 
-  it('returns all if fewer than N genres exist', () => {
-    const weights = new Map([[18, 5], [28, 3]]);
-    const top = getTopGenreIds(weights, 5);
-    expect(top.length).toBe(2);
+  it('returns all when fewer than N', () => {
+    expect(getTopGenreIds(new Map([[18, 5], [28, 3]]), 5).length).toBe(2);
   });
 
   it('empty map -> empty array', () => {
     expect(getTopGenreIds(new Map(), 3)).toEqual([]);
   });
+});
 
-  it('Drama with highest weight is first', () => {
-    const weights = new Map([[28, 2], [18, 10], [53, 5]]);
-    const top = getTopGenreIds(weights, 3);
-    expect(top[0]).toBe(18);
+// passesLanguageGenreFilter
+
+describe('passesLanguageGenreFilter', () => {
+  const movieTv: Set<ContentBucket> = new Set(['movie', 'tv']);
+
+  it('western movie passes for movie+tv', () => {
+    expect(passesLanguageGenreFilter(tmdbResult({ original_language: 'en', genre_ids: [28] }), movieTv)).toBe(true);
+  });
+
+  it('korean drama BLOCKED when dorama not picked', () => {
+    expect(passesLanguageGenreFilter(tmdbResult({ original_language: 'ko', genre_ids: [18] }), movieTv)).toBe(false);
+  });
+
+  it('japanese anime BLOCKED when anime not picked', () => {
+    expect(passesLanguageGenreFilter(tmdbResult({ original_language: 'ja', genre_ids: [16] }), movieTv)).toBe(false);
+  });
+
+  it('cartoon (genre 16) BLOCKED when animation not picked', () => {
+    expect(passesLanguageGenreFilter(tmdbResult({ original_language: 'en', genre_ids: [16] }), movieTv)).toBe(false);
+  });
+
+  it('korean drama ALLOWED when dorama picked', () => {
+    const buckets: Set<ContentBucket> = new Set(['tv', 'dorama']);
+    expect(passesLanguageGenreFilter(tmdbResult({ original_language: 'ko', genre_ids: [18] }), buckets)).toBe(true);
+  });
+
+  it('anime ALLOWED when anime picked', () => {
+    const buckets: Set<ContentBucket> = new Set(['anime']);
+    expect(passesLanguageGenreFilter(tmdbResult({ original_language: 'ja', genre_ids: [16] }), buckets)).toBe(true);
+  });
+
+  it('cartoon ALLOWED when animation picked', () => {
+    const buckets: Set<ContentBucket> = new Set(['animation']);
+    expect(passesLanguageGenreFilter(tmdbResult({ original_language: 'en', genre_ids: [16] }), buckets)).toBe(true);
+  });
+
+  it('anime picked also allows cartoons (animation implied)', () => {
+    const buckets: Set<ContentBucket> = new Set(['anime']);
+    expect(passesLanguageGenreFilter(tmdbResult({ original_language: 'en', genre_ids: [16] }), buckets)).toBe(true);
+  });
+
+  it('missing fields default to passing (non-animation, no lang)', () => {
+    expect(passesLanguageGenreFilter(tmdbResult({}), movieTv)).toBe(true);
   });
 });
 
 // buildBatch
 
 describe('buildBatch', () => {
-  const makeItems = (count: number, startId = 0) =>
-    Array.from({ length: count }, (_, i) => makeItem(startId + i, `Movie ${startId + i}`));
-
-  it('returns exactly 25 when enough items available', () => {
-    const result = buildBatch(
-      makeItems(15, 0),
-      makeItems(15, 100),
-      makeItems(15, 200),
-      new Set(),
-    );
+  it('returns exactly 25 when enough items', () => {
+    const result = buildBatch(makeItems(15, 0), makeItems(15, 100), makeItems(15, 200), new Set());
     expect(result.length).toBe(25);
   });
 
-  it('first 10 items are from actors', () => {
+  it('actors come first', () => {
     const actors = makeItems(10, 0);
-    const genres = makeItems(10, 100);
-    const popular = makeItems(5, 200);
-    const result = buildBatch(actors, genres, popular, new Set());
-    const actorIds = actors.map(a => a.tmdb_id);
-    expect(result.slice(0, 10).every(r => actorIds.includes(r.tmdb_id))).toBe(true);
+    const result = buildBatch(actors, makeItems(10, 100), makeItems(5, 200), new Set());
+    const actorIds = new Set(actors.map(a => a.tmdb_id));
+    expect(result.slice(0, 10).every(r => actorIds.has(r.tmdb_id))).toBe(true);
   });
 
-  it('no duplicates in result', () => {
+  it('actors are capped so genres still appear (many actors)', () => {
+    const actors = makeItems(20, 0);
+    const genres = makeItems(20, 100);
+    const result = buildBatch(actors, genres, [], new Set());
+    const genreIds = new Set(genres.map(g => g.tmdb_id));
+    const genresInResult = result.filter(r => genreIds.has(r.tmdb_id));
+    expect(genresInResult.length).toBeGreaterThan(0);
+    expect(result.length).toBe(25);
+  });
+
+  it('few actors -> genres fill the rest', () => {
+    const result = buildBatch(makeItems(3, 0), makeItems(20, 100), makeItems(10, 200), new Set());
+    expect(result.length).toBe(25);
+  });
+
+  it('no duplicates', () => {
     const shared = makeItems(5, 0);
     const result = buildBatch(shared, shared, shared, new Set());
-    const ids = result.map(r => r.tmdb_id);
-    expect(new Set(ids).size).toBe(ids.length);
+    expect(new Set(result.map(r => r.tmdb_id)).size).toBe(result.length);
   });
 
-  it('excludedIds do not appear in result', () => {
-    const items = makeItems(20, 0);
+  it('excludedIds never appear', () => {
     const excluded = new Set([0, 1, 2, 3, 4]);
-    const result = buildBatch(items, [], [], excluded);
+    const result = buildBatch(makeItems(20, 0), [], [], excluded);
     expect(result.every(r => !excluded.has(r.tmdb_id))).toBe(true);
   });
 
-  it('fills up to 25 from genres and popular when actors are few', () => {
-    const actors = makeItems(3, 0);
-    const genres = makeItems(20, 100);
-    const popular = makeItems(10, 200);
-    const result = buildBatch(actors, genres, popular, new Set());
-    expect(result.length).toBe(25);
-  });
-
-  it('returns whatever is available without error when total is low', () => {
+  it('returns whatever is available when total is low', () => {
     const result = buildBatch(makeItems(3, 0), makeItems(4, 10), makeItems(2, 20), new Set());
     expect(result.length).toBe(9);
   });
-
-  it('popular takes no more than 5 slots when batch is full', () => {
-    const popular = makeItems(15, 200);
-    const actors = makeItems(10, 0);
-    const genres = makeItems(10, 100);
-    const result = buildBatch(actors, genres, popular, new Set());
-    const popularIds = new Set(popular.map(p => p.tmdb_id));
-    const popularInResult = result.filter(r => popularIds.has(r.tmdb_id));
-    expect(popularInResult.length).toBe(5);
-  });
 });
 
-// integration scenarios (logic only, no network)
-
-describe('Cold Start scenarios', () => {
-
-  describe('User watched only anime movies', () => {
-    const movies = [
-      { tmdb_id: 129, genre: 'Anime', media_type: 'movie' as const },
-      { tmdb_id: 372058, genre: 'Anime', media_type: 'movie' as const },
-    ];
-
-    it('allowedBuckets contains only anime_movie', () => {
-      const buckets = getAllowedBuckets(movies);
-      expect([...buckets]).toEqual(['anime_movie']);
-    });
-
-    it('does NOT contain movie, animation, tv, anime, dorama', () => {
-      const buckets = getAllowedBuckets(movies);
-      expect(buckets.has('movie')).toBe(false);
-      expect(buckets.has('animation')).toBe(false);
-      expect(buckets.has('tv')).toBe(false);
-    });
-
-    it('top genre is Animation (16)', () => {
-      const weights = computeGenreWeights(movies, { '129': 9, '372058': 8 });
-      const top = getTopGenreIds(weights, 3);
-      expect(top).toContain(16);
-    });
+describe('Onboarding taste scenarios', () => {
+  it('only anime movies -> anime_movie bucket + genre 16', () => {
+    const movies = [movie(129, 'Anime'), movie(372058, 'Anime')];
+    const ratings = { '129': 9, '372058': 8 };
+    expect([...getAllowedBucketsFiltered(movies, ratings)]).toEqual(['anime_movie']);
+    expect(getTopGenreIds(computeGenreWeights(movies, ratings), 3)).toContain(16);
   });
 
-  describe('User watched only K-Drama', () => {
-    const movies = [
-      { tmdb_id: 154825, genre: 'K-Drama', media_type: 'tv' as const },
-      { tmdb_id: 117378, genre: 'K-Drama', media_type: 'tv' as const },
-    ];
-
-    it('allowedBuckets contains only dorama', () => {
-      const buckets = getAllowedBuckets(movies);
-      expect([...buckets]).toEqual(['dorama']);
-    });
-
-    it('does NOT contain movie, tv, anime', () => {
-      const buckets = getAllowedBuckets(movies);
-      expect(buckets.has('movie')).toBe(false);
-      expect(buckets.has('tv')).toBe(false);
-      expect(buckets.has('anime')).toBe(false);
-    });
+  it('series picked but NOT dorama -> tv only, no dorama', () => {
+    const movies = [series(1396, 'Series'), series(66732, 'Series')];
+    const buckets = getAllowedBucketsFiltered(movies, { '1396': 9, '66732': 8 });
+    expect(buckets.has('tv')).toBe(true);
+    expect(buckets.has('dorama')).toBe(false);
+    expect(buckets.has('anime')).toBe(false);
   });
 
-  describe('User watched only cartoons', () => {
-    const movies = [
-      { tmdb_id: 9806, genre: 'Animation', media_type: 'movie' as const },
-      { tmdb_id: 585, genre: 'Animation', media_type: 'movie' as const },
-    ];
-
-    it('allowedBuckets contains only animation', () => {
-      const buckets = getAllowedBuckets(movies);
-      expect([...buckets]).toEqual(['animation']);
-    });
-
-    it('does NOT contain movie or anime_movie', () => {
-      const buckets = getAllowedBuckets(movies);
-      expect(buckets.has('movie')).toBe(false);
-      expect(buckets.has('anime_movie')).toBe(false);
-    });
+  it('movies + series mix, one disliked anime -> no anime leak', () => {
+    const movies = [movie(238, 'Drama'), series(1396, 'Series'), movie(129, 'Anime')];
+    const ratings = { '238': 9, '1396': 8, '129': 2 };
+    const buckets = getAllowedBucketsFiltered(movies, ratings);
+    expect(buckets.has('movie')).toBe(true);
+    expect(buckets.has('tv')).toBe(true);
+    expect(buckets.has('anime_movie')).toBe(false);
+    expect(getLowRatedIds(movies, ratings)).toEqual([129]);
   });
 
-  describe('User watched Drama movies', () => {
-    const movies = [
-      { tmdb_id: 238, genre: 'Drama', media_type: 'movie' as const },
-      { tmdb_id: 13, genre: 'Drama', media_type: 'movie' as const },
-      { tmdb_id: 857, genre: 'Drama', media_type: 'movie' as const },
-    ];
-    const ratings = { '238': 9, '13': 8, '857': 7 };
-
-    it('allowedBuckets contains movie', () => {
-      const buckets = getAllowedBuckets(movies);
-      expect(buckets.has('movie')).toBe(true);
-    });
-
-    it('top genre is Drama (18)', () => {
-      const weights = computeGenreWeights(movies, ratings);
-      const top = getTopGenreIds(weights, 1);
-      expect(top[0]).toBe(18);
-    });
-
-    it('Drama weight is higher than any other genre', () => {
-      const weights = computeGenreWeights(movies, ratings);
-      const dramaWeight = weights.get(18) ?? 0;
-      for (const [id, w] of weights) {
-        if (id !== 18) expect(dramaWeight).toBeGreaterThanOrEqual(w);
-      }
-    });
-  });
-
-  describe('User watched Drama + K-Drama mix', () => {
-    const movies = [
-      { tmdb_id: 238, genre: 'Drama',   media_type: 'movie' as const },
-      { tmdb_id: 154825, genre: 'K-Drama', media_type: 'tv' as const },
-    ];
-
-    it('allowedBuckets contains both movie and dorama', () => {
-      const buckets = getAllowedBuckets(movies);
-      expect(buckets.has('movie')).toBe(true);
-      expect(buckets.has('dorama')).toBe(true);
-    });
-
-    it('does NOT contain anime or animation', () => {
-      const buckets = getAllowedBuckets(movies);
-      expect(buckets.has('anime')).toBe(false);
-      expect(buckets.has('animation')).toBe(false);
-    });
-  });
-
-  describe('User marked nothing', () => {
-    it('empty list -> empty buckets set', () => {
-      expect(getAllowedBuckets([])).toEqual(new Set());
-    });
-
-    it('empty weights -> empty topGenreIds', () => {
-      expect(getTopGenreIds(new Map(), 3)).toEqual([]);
-    });
+  it('user marked nothing -> empty buckets and genres', () => {
+    expect(getAllowedBucketsFiltered([], {}).size).toBe(0);
+    expect(getTopGenreIds(new Map(), 3)).toEqual([]);
   });
 });

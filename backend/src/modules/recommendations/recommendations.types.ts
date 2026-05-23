@@ -13,7 +13,7 @@ export interface AiRecommendationItem {
   why_this_will_work: string;
 
   tmdb_id?: number;
-  media_type?: 'movie';
+  media_type?: 'movie' | 'tv';
   poster_path?: string | null;
   vote_average?: number;
   overview?: string;

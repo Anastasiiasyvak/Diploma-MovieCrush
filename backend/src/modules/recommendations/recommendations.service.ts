@@ -9,8 +9,25 @@ const WATCHED_SAMPLE_SIZE = 10;
 const MIN_ACCEPTABLE = 5;
 
 interface WatchedRow extends WatchedMovieForPrompt {
+  media_type: 'movie' | 'tv';
   _updatedAt: Date;
 }
+
+const resolveTitleFromTmdb = async (
+  tmdbId: number,
+): Promise<{ title: string; media_type: 'movie' | 'tv' } | null> => {
+  try {
+    const movie = await fetchFromTMDB<{ title?: string }>(`/movie/${tmdbId}`);
+    if (movie.title) return { title: movie.title, media_type: 'movie' };
+  } catch {
+  }
+  try {
+    const tv = await fetchFromTMDB<{ name?: string }>(`/tv/${tmdbId}`);
+    if (tv.name) return { title: tv.name, media_type: 'tv' };
+  } catch {
+  }
+  return null;
+};
 
 export const getAllWatchedMovies = async (userId: number): Promise<WatchedRow[]> => {
   const result = await pool.query(
@@ -20,37 +37,55 @@ export const getAllWatchedMovies = async (userId: number): Promise<WatchedRow[]>
        uma.is_disliked,
        uma.updated_at,
        udr.overall_rating,
-       tmc.title AS cached_title
+       tmc.title       AS cached_title,
+       tmc.media_type  AS cached_media_type
      FROM user_movie_actions uma
      LEFT JOIN user_detailed_ratings udr
        ON udr.user_id = uma.user_id AND udr.tmdb_id = uma.tmdb_id
      LEFT JOIN tmdb_media_cache tmc
-       ON tmc.tmdb_id = uma.tmdb_id AND tmc.media_type = 'movie'
+       ON tmc.tmdb_id = uma.tmdb_id
      WHERE uma.user_id = $1 AND uma.is_watched = TRUE
      ORDER BY uma.updated_at DESC`,
     [userId]
   );
 
   const movies: WatchedRow[] = [];
+  const needsFetch: typeof result.rows = [];
+
   for (const row of result.rows) {
-    let title: string | null = row.cached_title;
-    if (!title) {
-      try {
-        const data = await fetchFromTMDB<{ title?: string }>(`/movie/${row.tmdb_id}`);
-        title = data.title || null;
-      } catch {
-        title = null;
-      }
+    if (row.cached_title) {
+      movies.push({
+        title: row.cached_title,
+        media_type: row.cached_media_type === 'tv' ? 'tv' : 'movie',
+        rating: row.overall_rating !== null ? Number(row.overall_rating) : null,
+        is_favorite: !!row.is_favorite,
+        is_disliked: !!row.is_disliked,
+        _updatedAt: row.updated_at,
+      });
+    } else {
+      needsFetch.push(row);
     }
-    if (!title) continue;
+  }
+
+  const fetched = await Promise.all(
+    needsFetch.map(row => resolveTitleFromTmdb(row.tmdb_id))
+  );
+
+  for (let i = 0; i < needsFetch.length; i++) {
+    const resolved = fetched[i];
+    if (!resolved) continue;
+    const row = needsFetch[i];
     movies.push({
-      title,
+      title: resolved.title,
+      media_type: resolved.media_type,
       rating: row.overall_rating !== null ? Number(row.overall_rating) : null,
       is_favorite: !!row.is_favorite,
       is_disliked: !!row.is_disliked,
       _updatedAt: row.updated_at,
     });
   }
+
+  movies.sort((a, b) => b._updatedAt.getTime() - a._updatedAt.getTime());
 
   return movies;
 };
@@ -111,20 +146,20 @@ const buildRerankPrompt = (
 
   const candidatesBlock = candidates
     .map((c, i) =>
-      `${i + 1}. [${c.source.toUpperCase()}] id:${c.tmdb_id} | "${c.title}" | ${c.vote_average.toFixed(1)}`
+      `${i + 1}. [${c.source.toUpperCase()}] id:${c.tmdb_id} | "${c.title}" | ${c.media_type === 'tv' ? 'series' : 'movie'} | ${c.vote_average.toFixed(1)}`
     )
     .join('\n');
 
-  return `You are MovieCrush - a senior film taste expert inside a movie tracking app.
+  return `You are MovieCrush - a senior film & TV taste expert inside a movie tracking app.
 
-Your job: from the candidate list below, pick exactly 15 movies that will feel most rewarding for this specific user.
+Your job: from the candidate list below, pick exactly 15 titles (movies or series) that will feel most rewarding for this specific user.
 If the candidate pool has fewer than 15 items, return all of them.
 Only return fewer than 15 if you genuinely cannot find more good matches - minimum 5.
 
 WHAT THIS USER WATCHES & RATES
 ${watchedBlock}${samplingNote}
 
-CANDIDATE POOL — ${candidates.length} movies
+CANDIDATE POOL — ${candidates.length} titles
 ${candidatesBlock}
 
 [ALS] = recommended by collaborative filtering (users with similar taste rated these highly)
@@ -188,8 +223,8 @@ const savePersonalizedToCache = async (
   await pool.query(
     `INSERT INTO user_ai_recommendations
        (user_id, recommendations, model_used, watched_count, expires_at)
-     VALUES ($1, $2, $3, $4, NOW() + INTERVAL '${CACHE_TTL_HOURS} hours')`,
-    [userId, JSON.stringify(recommendations), modelUsed, watchedCount]
+     VALUES ($1, $2, $3, $4, NOW() + ($5 || ' hours')::interval)`,
+    [userId, JSON.stringify(recommendations), modelUsed, watchedCount, String(CACHE_TTL_HOURS)]
   );
 };
 
@@ -289,7 +324,12 @@ export const rerankWithGemini = async (
 
   console.log(`\n[Rerank] Gemini returned ${rerankResult.recommendations?.length ?? 0} items:`);
 
-  const categoryCount = { strong_match: 0, diversity: 0, hidden_gem: 0 };
+  const VALID_CATEGORIES = ['strong_match', 'diversity', 'hidden_gem'] as const;
+  type Category = typeof VALID_CATEGORIES[number];
+  const isValidCategory = (c: unknown): c is Category =>
+    typeof c === 'string' && (VALID_CATEGORIES as readonly string[]).includes(c);
+
+  const categoryCount: Record<Category, number> = { strong_match: 0, diversity: 0, hidden_gem: 0 };
 
   for (const rec of rerankResult.recommendations ?? []) {
     const candidate = candidateMap.get(rec.tmdb_id);
@@ -297,8 +337,8 @@ export const rerankWithGemini = async (
       console.warn(`  Unknown tmdb_id ${rec.tmdb_id} — skipping`);
       continue;
     }
-    const cat = rec.category ?? 'strong_match';
-    categoryCount[cat] = (categoryCount[cat] ?? 0) + 1;
+    const cat: Category = isValidCategory(rec.category) ? rec.category : 'strong_match';
+    categoryCount[cat] += 1;
     console.log(`  [${cat}] [${candidate.source.toUpperCase()}] tmdb_id:${rec.tmdb_id} "${candidate.title}"`);
     reranked.push({
       tmdb_id: candidate.tmdb_id,

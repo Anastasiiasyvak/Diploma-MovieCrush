@@ -182,14 +182,19 @@ const getUserProfile = async (userId: number): Promise<UserProfile> => {
   const topActorId = actorRes.rows.length > 0 ? Number(actorRes.rows[0].actor_tmdb_id) : null;
 
   const onboardingRes = await pool.query(
-    `SELECT tmdb_id, genre, media_type FROM onboarding_movies
-     WHERE tmdb_id = ANY(
-       SELECT unnest(watched_tmdb_ids) FROM user_onboarding WHERE user_id = $1
+    `SELECT om.tmdb_id, om.genre, om.media_type,
+            (uo.ratings ->> om.tmdb_id::text)::int AS rating
+     FROM onboarding_movies om
+     JOIN user_onboarding uo ON uo.user_id = $1
+     WHERE om.tmdb_id = ANY(
+       SELECT unnest(uo.watched_tmdb_ids)
      )`,
     [userId]
   );
   const allowedBuckets = new Set<ContentBucket>();
   for (const row of onboardingRes.rows) {
+    const rating = row.rating !== null && row.rating !== undefined ? Number(row.rating) : null;
+    if (rating !== null && rating < 6) continue;
     allowedBuckets.add(getContentBucket({ tmdb_id: row.tmdb_id, genre: row.genre, media_type: row.media_type }));
   }
   if (allowedBuckets.size === 0) {
@@ -291,10 +296,11 @@ const fetchDiscoverCandidates = async (
   };
 
   if (genreStr) {
-    // Звичайні фільми — тільки якщо є в allowedBuckets
+    // Звичайні фільми — виключаємо анімацію (16) та ja/ko-мову,
+    // щоб аніме/азійський контент не лізли у фільмовий бакет
     if (allowedBuckets.has('movie')) {
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: genreStr, page: '1' }).catch(() => ({ results: [] })));
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: genreStr, page: '2' }).catch(() => ({ results: [] })));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: genreStr, without_genres: '99,16', without_original_language: 'ja,ko', page: '1' }).catch(() => ({ results: [] })));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: genreStr, without_genres: '99,16', without_original_language: 'ja,ko', page: '2' }).catch(() => ({ results: [] })));
     }
     // Аніме фільми
     if (allowedBuckets.has('anime_movie')) {
@@ -306,7 +312,7 @@ const fetchDiscoverCandidates = async (
     }
     // Звичайні серіали
     if (allowedBuckets.has('tv')) {
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', { ...baseTvParams, with_genres: genreStr, without_original_language: 'ja,ko', page: '1' }).catch(() => ({ results: [] })));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', { ...baseTvParams, with_genres: genreStr, without_genres: '99,16', without_original_language: 'ja,ko', page: '1' }).catch(() => ({ results: [] })));
     }
     // Аніме серіали
     if (allowedBuckets.has('anime')) {

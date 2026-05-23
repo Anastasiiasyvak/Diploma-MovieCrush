@@ -7,7 +7,7 @@ interface OnboardingData {
   ratings: Record<string, number>;
 }
 
-interface OnboardingMovie {
+export interface OnboardingMovie {
   tmdb_id: number;
   genre: string;
   media_type: 'movie' | 'tv';
@@ -23,6 +23,8 @@ interface TmdbDiscoverResult {
     overview?: string;
     release_date?: string;
     first_air_date?: string;
+    original_language?: string;
+    genre_ids?: number[];
   }>;
   total_pages?: number;
 }
@@ -45,8 +47,7 @@ export interface ColdStartResponse {
 
 const BATCH_SIZE = 25;
 const ACTOR_SLOTS = 10;
-const GENRE_SLOTS = 10;
-const POPULAR_SLOTS = 5;
+const ACTOR_SLOTS_PER_PERSON = 5;
 
 const GENRE_TO_TMDB: Record<string, number[]> = {
   'Drama': [18],
@@ -69,9 +70,9 @@ const GENRE_TO_TMDB: Record<string, number[]> = {
   'Series': [18],
 };
 
-type ContentBucket = 'movie' | 'tv' | 'anime' | 'anime_movie' | 'dorama' | 'animation';
+export type ContentBucket = 'movie' | 'tv' | 'anime' | 'anime_movie' | 'dorama' | 'animation';
 
-const getContentBucket = (m: OnboardingMovie): ContentBucket => {
+export const getContentBucket = (m: OnboardingMovie): ContentBucket => {
   const g = m.genre.toLowerCase();
   if (m.media_type === 'tv') {
     if (g === 'anime') return 'anime';
@@ -83,11 +84,6 @@ const getContentBucket = (m: OnboardingMovie): ContentBucket => {
   return 'movie';
 };
 
-const getAllowedBuckets = (movies: OnboardingMovie[]): Set<ContentBucket> => {
-  const buckets = new Set<ContentBucket>();
-  for (const m of movies) buckets.add(getContentBucket(m));
-  return buckets;
-};
 
 const tmdbItemToColdStart = (item: TmdbDiscoverResult['results'][0]): ColdStartItem => ({
   tmdb_id: item.id,
@@ -98,6 +94,24 @@ const tmdbItemToColdStart = (item: TmdbDiscoverResult['results'][0]): ColdStartI
   overview: item.overview ?? '',
   release_date: item.release_date ?? item.first_air_date ?? '',
 });
+
+export const passesLanguageGenreFilter = (
+  item: TmdbDiscoverResult['results'][0],
+  allowedBuckets: Set<ContentBucket>,
+): boolean => {
+  const lang = item.original_language;
+  const isAnimation = (item.genre_ids ?? []).includes(16);
+
+  const wantsAnime = allowedBuckets.has('anime') || allowedBuckets.has('anime_movie');
+  const wantsDorama = allowedBuckets.has('dorama');
+  const wantsAnimation = allowedBuckets.has('animation') || wantsAnime;
+
+  if (lang === 'ja' && !wantsAnime) return false;
+  if (lang === 'ko' && !wantsDorama) return false;
+  if (isAnimation && !wantsAnimation) return false;
+
+  return true;
+};
 
 const getWatchedCount = async (userId: number): Promise<number> => {
   const res = await pool.query(
@@ -130,13 +144,16 @@ const getOnboardingMovies = async (tmdbIds: number[]): Promise<OnboardingMovie[]
   return res.rows;
 };
 
-const computeGenreWeights = (
+const RATING_THRESHOLD = 6;
+
+export const computeGenreWeights = (
   movies: OnboardingMovie[],
   ratings: Record<string, number>,
 ): Map<number, number> => {
   const weights = new Map<number, number>();
   for (const movie of movies) {
     const rating = ratings[String(movie.tmdb_id)] ?? null;
+    if (rating !== null && rating < RATING_THRESHOLD) continue;
     const weight = rating !== null ? (rating >= 8 ? 3 : rating >= 6 ? 2 : 1) : 1;
     for (const gId of GENRE_TO_TMDB[movie.genre] ?? []) {
       weights.set(gId, (weights.get(gId) ?? 0) + weight);
@@ -145,13 +162,38 @@ const computeGenreWeights = (
   return weights;
 };
 
-const getTopGenreIds = (weights: Map<number, number>, n: number): number[] =>
+export const getAllowedBucketsFiltered = (
+  movies: OnboardingMovie[],
+  ratings: Record<string, number>,
+): Set<ContentBucket> => {
+  const buckets = new Set<ContentBucket>();
+  for (const m of movies) {
+    const rating = ratings[String(m.tmdb_id)] ?? null;
+    if (rating !== null && rating < RATING_THRESHOLD) continue;
+    buckets.add(getContentBucket(m));
+  }
+  return buckets;
+};
+
+export const getLowRatedIds = (
+  movies: OnboardingMovie[],
+  ratings: Record<string, number>,
+): number[] => {
+  const ids: number[] = [];
+  for (const m of movies) {
+    const rating = ratings[String(m.tmdb_id)] ?? null;
+    if (rating !== null && rating < RATING_THRESHOLD) ids.push(m.tmdb_id);
+  }
+  return ids;
+};
+
+export const getTopGenreIds = (weights: Map<number, number>, n: number): number[] =>
   [...weights.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, n)
     .map(([id]) => id);
 
-const buildBatch = (
+export const buildBatch = (
   byActors: ColdStartItem[],
   byGenres: ColdStartItem[],
   byPopular: ColdStartItem[],
@@ -172,11 +214,13 @@ const buildBatch = (
     }
   };
 
-  addItems(byActors, ACTOR_SLOTS);
-  addItems(byGenres, GENRE_SLOTS);
-  addItems(byPopular, POPULAR_SLOTS);
+  const ACTOR_CEILING = Math.min(byActors.length, Math.max(ACTOR_SLOTS, Math.floor(BATCH_SIZE * 0.6)));
+  addItems(byActors, ACTOR_CEILING);
 
-  // Добираємо якщо якийсь бакет дав мало
+  addItems(byGenres, BATCH_SIZE - result.length);
+
+  addItems(byPopular, BATCH_SIZE - result.length);
+
   if (result.length < BATCH_SIZE) {
     addItems([...byGenres, ...byActors, ...byPopular], BATCH_SIZE - result.length);
   }
@@ -195,48 +239,61 @@ const fetchByActors = async (
 ): Promise<ColdStartItem[]> => {
   if (actorIds.length === 0) return [];
 
-  const page = String((seed % 10) + 1);
   const isMovieBucket = allowedBuckets.has('movie') || allowedBuckets.has('anime_movie') || allowedBuckets.has('animation');
   const endpoint = isMovieBucket ? '/discover/movie' : '/discover/tv';
 
-  const jobs = actorIds.map(actorId => {
-    const params: Record<string, string> = {
-      with_cast: String(actorId),
-      sort_by: 'popularity.desc',
-      without_genres: '99',
-      'vote_count.gte': '100',
-      page,
-    };
-    if (minVoteAvg) params['vote_average.gte'] = minVoteAvg;
-    return fetchFromTMDB<TmdbDiscoverResult>(endpoint, params)
-      .catch(() => ({ results: [] as TmdbDiscoverResult['results'] }));
+  const wantsAnime = allowedBuckets.has('anime') || allowedBuckets.has('anime_movie');
+  const wantsAnimation = allowedBuckets.has('animation') || wantsAnime;
+  const withoutGenres = wantsAnimation ? '99' : '99,16';
+  const PAGES_PER_ACTOR = 3;
+
+  const jobsPerActor = actorIds.map(actorId => {
+    const pageJobs = Array.from({ length: PAGES_PER_ACTOR }, (_, i) => {
+      const params: Record<string, string> = {
+        with_cast: String(actorId),
+        sort_by: 'popularity.desc',
+        without_genres: withoutGenres,
+        'vote_count.gte': '100',
+        page: String(i + 1),
+      };
+      if (minVoteAvg) params['vote_average.gte'] = minVoteAvg;
+      return fetchFromTMDB<TmdbDiscoverResult>(endpoint, params)
+        .catch(() => ({ results: [] as TmdbDiscoverResult['results'] }));
+    });
+    return Promise.all(pageJobs).then(pages => pages.flatMap(p => p.results ?? []));
   });
 
-  const results = await Promise.all(jobs);
+  const perActorResults = await Promise.all(jobsPerActor);
   const items: ColdStartItem[] = [];
   const seen = new Set<number>();
 
-  for (const r of results) {
+  for (const actorPool of perActorResults) {
+    const valid = actorPool.filter(item =>
+      passesLanguageGenreFilter(item, allowedBuckets) &&
+      !excludedIds.has(item.id) &&
+      !seen.has(item.id)
+    );
+    if (valid.length === 0) continue;
+
+    const offset = (seed * slotsPerActor) % Math.max(valid.length, 1);
     let taken = 0;
-    for (const item of r.results ?? []) {
-      if (taken >= slotsPerActor) break;
-      if (!excludedIds.has(item.id) && !seen.has(item.id)) {
-        seen.add(item.id);
-        items.push(tmdbItemToColdStart(item));
-        taken++;
-      }
+    for (let i = 0; i < valid.length && taken < slotsPerActor; i++) {
+      const item = valid[(offset + i) % valid.length];
+      if (seen.has(item.id)) continue;
+      seen.add(item.id);
+      items.push(tmdbItemToColdStart(item));
+      taken++;
     }
   }
 
-  // фолбек без жанру якщо мало результатів
   if (items.length < actorIds.length * 2 && genreIds.length > 0) {
     const fallbackJobs = actorIds.map(actorId => {
       const params: Record<string, string> = {
         with_cast: String(actorId),
         sort_by: 'vote_average.desc',
+        without_genres: withoutGenres,
         'vote_count.gte': '300',
-        without_genres: '99',
-        page: '1', 
+        page: '1',
       };
       if (minVoteAvg) params['vote_average.gte'] = minVoteAvg;
       return fetchFromTMDB<TmdbDiscoverResult>(endpoint, params)
@@ -247,7 +304,8 @@ const fetchByActors = async (
       let taken = 0;
       for (const item of r.results ?? []) {
         if (taken >= slotsPerActor) break;
-        if (!excludedIds.has(item.id) && !seen.has(item.id)) {
+        if (passesLanguageGenreFilter(item, allowedBuckets) &&
+            !excludedIds.has(item.id) && !seen.has(item.id)) {
           seen.add(item.id);
           items.push(tmdbItemToColdStart(item));
           taken++;
@@ -268,15 +326,14 @@ const fetchByGenres = async (
 ): Promise<ColdStartItem[]> => {
   if (genreIds.length === 0) return [];
 
-  const page = String((seed % 10) + 1);
+  const page = String((seed % 20) + 1);
   const genreStr = genreIds.join('|');
   const jobs: Promise<TmdbDiscoverResult>[] = [];
-
-  const pages = [
-    String((seed % 10) + 1),
-    String(((seed + 3) % 10) + 1),
-    String(((seed + 6) % 10) + 1),
-  ];
+  const PAGES_PER_BATCH = 3;
+  const PAGE_DEPTH = 20;
+  const pages = Array.from({ length: PAGES_PER_BATCH }, (_, i) =>
+    String(((seed * PAGES_PER_BATCH + i) % PAGE_DEPTH) + 1)
+  );
 
   const baseParams = (extra: Record<string, string> = {}, p = page): Record<string, string> => ({
     with_genres: genreStr,
@@ -290,10 +347,14 @@ const fetchByGenres = async (
 
   for (const p of pages) {
     if (allowedBuckets.has('movie')) {
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', baseParams({}, p)).catch(() => ({ results: [] })));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', baseParams({
+        without_genres: '99,16',
+        without_original_language: 'ja,ko',
+      }, p)).catch(() => ({ results: [] })));
     }
     if (allowedBuckets.has('animation')) {
       jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', baseParams({
+        with_genres: '16',
         without_original_language: 'ja',
         without_keywords: '210024',
       }, p)).catch(() => ({ results: [] })));
@@ -306,7 +367,9 @@ const fetchByGenres = async (
     }
     if (allowedBuckets.has('tv')) {
       jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', baseParams({
-        without_keywords: '210024', without_original_language: 'ja',
+        without_genres: '99,16',
+        without_keywords: '210024',
+        without_original_language: 'ja,ko',
       }, p)).catch(() => ({ results: [] })));
     }
     if (allowedBuckets.has('anime')) {
@@ -332,7 +395,8 @@ const fetchByGenres = async (
   for (let i = 0; i < maxLen; i++) {
     for (const r of results) {
       const item = (r as any).results?.[i];
-      if (item && !seen.has(item.id) && !excludedIds.has(item.id)) {
+      if (item && !seen.has(item.id) && !excludedIds.has(item.id) &&
+          passesLanguageGenreFilter(item, allowedBuckets)) {
         seen.add(item.id);
         items.push(tmdbItemToColdStart(item));
       }
@@ -348,7 +412,7 @@ const fetchPopularByBuckets = async (
   seed: number,
   excludedIds: Set<number>,
 ): Promise<ColdStartItem[]> => {
-  const page     = String((seed % 5) + 1);
+  const page = String(((seed * 3) % 20) + 1);
   const genreStr = genreIds.length > 0 ? genreIds.join('|') : undefined;
   const jobs: Promise<TmdbDiscoverResult>[] = [];
 
@@ -362,10 +426,14 @@ const fetchPopularByBuckets = async (
   });
 
   if (allowedBuckets.has('movie')) {
-    jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', discoverParams()).catch(() => ({ results: [] })));
+    jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', discoverParams({
+      without_genres: '99,16',
+      without_original_language: 'ja,ko',
+    })).catch(() => ({ results: [] })));
   }
   if (allowedBuckets.has('animation')) {
     jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', discoverParams({
+      with_genres: '16',
       without_original_language: 'ja',
       without_keywords: '210024',
     })).catch(() => ({ results: [] })));
@@ -377,7 +445,9 @@ const fetchPopularByBuckets = async (
   }
   if (allowedBuckets.has('tv')) {
     jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', discoverParams({
-      without_keywords: '210024', without_original_language: 'ja',
+      without_genres: '99,16',
+      without_keywords: '210024',
+      without_original_language: 'ja,ko',
     })).catch(() => ({ results: [] })));
   }
   if (allowedBuckets.has('anime')) {
@@ -391,7 +461,8 @@ const fetchPopularByBuckets = async (
     }).catch(() => ({ results: [] })));
   }
 
-  if (jobs.length === 0) {
+  const usedGenericPopular = jobs.length === 0;
+  if (usedGenericPopular) {
     jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/movie/popular', { page }).catch(() => ({ results: [] })));
   }
 
@@ -401,10 +472,10 @@ const fetchPopularByBuckets = async (
 
   for (const r of results) {
     for (const item of (r as any).results ?? []) {
-      if (!seen.has(item.id) && !excludedIds.has(item.id)) {
-        seen.add(item.id);
-        items.push(tmdbItemToColdStart(item));
-      }
+      if (seen.has(item.id) || excludedIds.has(item.id)) continue;
+      if (!usedGenericPopular && !passesLanguageGenreFilter(item, allowedBuckets)) continue;
+      seen.add(item.id);
+      items.push(tmdbItemToColdStart(item));
     }
   }
   return items;
@@ -439,13 +510,17 @@ export const getColdStartRecommendations = async (
   }
 
   const onboardingMovies = await getOnboardingMovies(onboarding.watched_tmdb_ids);
-  const allowedBuckets = getAllowedBuckets(onboardingMovies);
+  const allowedBuckets = getAllowedBucketsFiltered(onboardingMovies, onboarding.ratings);
   const genreWeights = computeGenreWeights(onboardingMovies, onboarding.ratings);
   const topGenreIds = getTopGenreIds(genreWeights, 3);
+
+  const lowRatedIds = getLowRatedIds(onboardingMovies, onboarding.ratings);
+  for (const id of lowRatedIds) excludedIds.add(id);
+
   const hasGoodRatings = Object.values(onboarding.ratings).some(r => r >= 7);
   const minVoteAvg = hasGoodRatings ? '6.5' : undefined;
   const actorIds = onboarding.liked_actor_ids;
-  const slotsPerActor = actorIds.length > 0 ? Math.ceil(ACTOR_SLOTS / actorIds.length) : 0;
+  const slotsPerActor = actorIds.length > 0 ? ACTOR_SLOTS_PER_PERSON : 0;
 
   const [actorResults, genreResults, popularResults] = await Promise.all([
     fetchByActors(actorIds, allowedBuckets, topGenreIds, seed, slotsPerActor, excludedIds, minVoteAvg),
