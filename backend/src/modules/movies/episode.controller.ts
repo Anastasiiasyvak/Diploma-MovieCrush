@@ -4,6 +4,7 @@ import {
   getWatchedEpisodes,
   toggleEpisodeWatch,
 } from './episode.service';
+import { cacheMediaIfNeeded } from '../tmdb_cache/tmdb_cache.service';
 
 export const fetchWatchedEpisodes = async (req: AuthRequest, res: Response) => {
   try {
@@ -33,6 +34,9 @@ export const toggleEpisode = async (req: AuthRequest, res: Response) => {
       series_tmdb_id, season_number, episode_number,
       episode_tmdb_id, total_episodes_in_series, total_seasons_in_series,
     });
+    
+    cacheMediaIfNeeded(series_tmdb_id, 'tv').catch(() => {});
+
     res.json(result);
   } catch (err) {
     console.error('toggleEpisode error:', err);
