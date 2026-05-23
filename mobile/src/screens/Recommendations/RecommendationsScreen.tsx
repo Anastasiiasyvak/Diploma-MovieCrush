@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
   ActivityIndicator, Animated, StatusBar,
-  Pressable, ScrollView,
+  Pressable,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { COLORS } from '../../constants/colors';
@@ -13,10 +13,7 @@ import { DrawerContent } from '../../components/recommendations/DrawerContent';
 import { fetchRecommendations, DiscoverFilters } from '../../services/tmdbService';
 import {
   recommendationsService,
-  AiRecommendation,
-  AiRecommendationsResponse,
-  isColdStart,
-  isAls,
+  isPersonalized,
   MainRecsResponse,
 } from '../../services/recommendationsService';
 import { getRelevantGenres, DECADES, DEFAULT_FILTERS } from '../../constants/genres';
@@ -53,38 +50,16 @@ const buildFiltersList = (f: FilterState): DiscoverFilters[] => {
   }));
 };
 
-const recsToMediaItems = (data: MainRecsResponse): MediaItem[] => {
-  if (isColdStart(data) || isAls(data)) {
-    return data.recommendations.map(r => ({
-      id: r.tmdb_id,
-      mediaType: r.media_type,
-      title: r.title,
-      poster_path: r.poster_path,
-      vote_average: r.vote_average,
-      release_date: r.release_date,
-      overview: r.overview,
-    } as MediaItem));
-  }
-  return (data as AiRecommendationsResponse).recommendations.map((r: AiRecommendation) => ({
+const recsToMediaItems = (data: MainRecsResponse): MediaItem[] =>
+  data.recommendations.map(r => ({
     id: r.tmdb_id,
-    mediaType: r.media_type ?? 'movie',
+    mediaType: r.media_type,
     title: r.title,
     poster_path: r.poster_path,
     vote_average: r.vote_average,
-    release_date: `${r.year}-01-01`,
+    release_date: r.release_date,
     overview: r.overview,
   } as MediaItem));
-};
-
-const aiToMediaItem = (r: AiRecommendation): MediaItem => ({
-  id: r.tmdb_id,
-  mediaType: r.media_type ?? 'movie',
-  title: r.title,
-  poster_path: r.poster_path,
-  vote_average: r.vote_average,
-  release_date: `${r.year}-01-01`,
-  overview: r.overview,
-} as MediaItem);
 
 export default function RecommendationsScreen({ navigation }: any) {
   const [movies, setMovies] = useState<MediaItem[]>([]);
@@ -95,14 +70,12 @@ export default function RecommendationsScreen({ navigation }: any) {
   const [pending, setPending] = useState<FilterState>(DEFAULT_FILTERS);
   const [seed, setSeed] = useState(0);
   const [activeTab, setActiveTab] = useState<'home' | 'recommendations' | 'challenges'>('recommendations');
-  const [aiOpen, setAiOpen] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiRefreshing, setAiRefreshing] = useState(false);
-  const [aiRecs, setAiRecs] = useState<AiRecommendation[]>([]);
-  const [aiError, setAiError] = useState<string | null>(null);
-  const [aiCached, setAiCached] = useState(false);
-  const [aiModelUsed, setAiModelUsed] = useState<string>('');
-  const [aiWatchedCount, setAiWatchedCount] = useState(0);
+  const [isPersonalizedMode, setIsPersonalizedMode] = useState(false);
+  const [personalizedMeta, setPersonalizedMeta] = useState<{
+    cached: boolean;
+    computed_at: string;
+    model_used: string;
+  } | null>(null);
 
   const drawerAnim = useRef(new Animated.Value(DRAWER_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
@@ -115,6 +88,9 @@ export default function RecommendationsScreen({ navigation }: any) {
       let items: MediaItem[] = [];
 
       if (isFiltersActive(f)) {
+        setIsPersonalizedMode(false);
+        setPersonalizedMeta(null);
+
         const filtersList = buildFiltersList(f);
         const results = await Promise.all(filtersList.map(fl => fetchRecommendations(fl, s)));
 
@@ -132,6 +108,19 @@ export default function RecommendationsScreen({ navigation }: any) {
         items = merged.slice(0, 25);
       } else {
         const data = await recommendationsService.getMain(s);
+
+        if (isPersonalized(data)) {
+          setIsPersonalizedMode(true);
+          setPersonalizedMeta({
+            cached: data.cached,
+            computed_at: data.computed_at,
+            model_used: data.model_used,
+          });
+        } else {
+          setIsPersonalizedMode(false);
+          setPersonalizedMeta(null);
+        }
+
         items = recsToMediaItems(data);
       }
 
@@ -178,34 +167,6 @@ export default function RecommendationsScreen({ navigation }: any) {
     const s = seed + 1; setSeed(s); loadMovies(filters, s, true);
   };
 
-  const openAi = async () => {
-    setAiOpen(true);
-    if (aiRecs.length > 0) return;
-    await loadAiRecs(false);
-  };
-
-  const closeAi = () => setAiOpen(false);
-
-  const loadAiRecs = async (forceRefresh: boolean) => {
-    forceRefresh ? setAiRefreshing(true) : setAiLoading(true);
-    setAiError(null);
-    try {
-      const data = forceRefresh
-        ? await recommendationsService.refreshAi()
-        : await recommendationsService.getAi();
-      setAiRecs(data.recommendations);
-      setAiCached(data.cached);
-      setAiModelUsed(data.model_used);
-      setAiWatchedCount(data.watched_count);
-    } catch (err: any) {
-      const msg = err?.response?.data?.error || 'Could not load AI recommendations.';
-      setAiError(msg);
-    } finally {
-      setAiLoading(false);
-      setAiRefreshing(false);
-    }
-  };
-
   const handleTabPress = (tab: 'home' | 'recommendations' | 'challenges') => {
     setActiveTab(tab);
     if (tab === 'home') navigation.navigate('Home');
@@ -239,28 +200,36 @@ export default function RecommendationsScreen({ navigation }: any) {
 
   const visibleGenres = getRelevantGenres(pending.contentTypes);
 
+  const showNewBatch = isFiltersActive(filters) || !isPersonalizedMode;
+
+  const personalizedDate = personalizedMeta?.computed_at
+    ? new Date(personalizedMeta.computed_at).toLocaleDateString('en-US', {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      })
+    : null;
+
   const ListHeader = () => (
     <View>
-      <TouchableOpacity style={styles.aiCta} onPress={openAi} activeOpacity={0.85}>
-        <View style={styles.aiCtaIcon}>
-          <Text style={styles.aiCtaIconText}>✨</Text>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.aiCtaTitle}>AI Assistant</Text>
-          <Text style={styles.aiCtaSubtitle}>Personalized picks with reasoning</Text>
-        </View>
-        <Text style={styles.aiCtaArrow}>›</Text>
-      </TouchableOpacity>
-
       <View style={styles.listHeader}>
         <View>
-          <Text style={styles.pageTitle}>For You ✨</Text>
-          <Text style={styles.pageSubtitle}>{movies.length} picks this round</Text>
+          <Text style={styles.pageTitle}>
+            {isPersonalizedMode ? 'For You ✨' : 'Discover 🎬'}
+          </Text>
+          {isPersonalizedMode && personalizedDate ? (
+            <Text style={styles.pageSubtitle}>
+              Updated {personalizedDate}
+              {personalizedMeta?.model_used ? ` · ${personalizedMeta.model_used}` : ''}
+            </Text>
+          ) : (
+            <Text style={styles.pageSubtitle}>{movies.length} picks this round</Text>
+          )}
         </View>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.refreshBtn} onPress={refreshBatch} disabled={isRefreshing}>
-            <Text style={styles.refreshBtnText}>{isRefreshing ? '...' : '🔄 New batch'}</Text>
-          </TouchableOpacity>
+          {showNewBatch && (
+            <TouchableOpacity style={styles.refreshBtn} onPress={refreshBatch} disabled={isRefreshing}>
+              <Text style={styles.refreshBtnText}>{isRefreshing ? '...' : '🔄 New batch'}</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.filterBtn} onPress={openDrawer}>
             <Text style={styles.filterBtnText}>⚙️ Filter</Text>
             {activeFilterCount > 0 && (
@@ -283,7 +252,9 @@ export default function RecommendationsScreen({ navigation }: any) {
         {isLoading ? (
           <View style={styles.loaderWrap}>
             <ActivityIndicator size="large" color={COLORS.pink} />
-            <Text style={styles.loaderText}>Finding your picks…</Text>
+            <Text style={styles.loaderText}>
+              {isPersonalizedMode ? 'Personalizing your picks…' : 'Finding your picks…'}
+            </Text>
           </View>
         ) : (
           <FlatList
@@ -338,115 +309,6 @@ export default function RecommendationsScreen({ navigation }: any) {
               />
             </Animated.View>
           </>
-        )}
-
-        {aiOpen && (
-          <View style={styles.aiOverlayRoot}>
-            <View style={styles.aiHeader}>
-              <TouchableOpacity onPress={closeAi} style={styles.aiCloseBtn}>
-                <Text style={styles.aiCloseText}>✕</Text>
-              </TouchableOpacity>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.aiHeaderTitle}>AI Assistant ✨</Text>
-                {!aiLoading && !aiError && aiRecs.length > 0 && (
-                  <Text style={styles.aiHeaderSubtitle}>
-                    {aiCached ? 'From cache · ' : 'Just generated · '}
-                    {aiWatchedCount} movies analyzed
-                  </Text>
-                )}
-              </View>
-              <TouchableOpacity
-                style={styles.aiRefreshBtn}
-                onPress={() => loadAiRecs(true)}
-                disabled={aiRefreshing || aiLoading}
-              >
-                <Text style={styles.aiRefreshText}>
-                  {aiRefreshing ? '...' : '🔄'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {aiLoading ? (
-              <View style={styles.aiLoaderWrap}>
-                <ActivityIndicator size="large" color={COLORS.pink} />
-                <Text style={styles.aiLoaderText}>Analyzing your taste…</Text>
-                <Text style={styles.aiLoaderSubtext}>This can take 10-30 seconds</Text>
-              </View>
-            ) : aiError ? (
-              <View style={styles.aiErrorWrap}>
-                <Text style={styles.aiErrorEmoji}>🎬</Text>
-                <Text style={styles.aiErrorTitle}>Can't generate yet</Text>
-                <Text style={styles.aiErrorText}>{aiError}</Text>
-                <TouchableOpacity style={styles.aiRetryBtn} onPress={() => loadAiRecs(false)}>
-                  <Text style={styles.aiRetryText}>Try again</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <ScrollView
-                contentContainerStyle={styles.aiScrollContent}
-                showsVerticalScrollIndicator={false}
-              >
-                {aiRecs.map((rec, idx) => (
-                  <TouchableOpacity
-                    key={`${rec.tmdb_id}-${idx}`}
-                    style={styles.aiRecCard}
-                    activeOpacity={0.85}
-                    onPress={() => {
-                      setAiOpen(false);
-                      if (rec.media_type === 'tv') {
-                        navigation.navigate('Series', { seriesId: rec.tmdb_id });
-                      } else {
-                        navigation.navigate('Movie', { movieId: rec.tmdb_id });
-                      }
-                    }}
-                  >
-                    <MovieGridCard
-                      item={aiToMediaItem(rec)}
-                      index={idx}
-                      cardWidth={90}
-                      cardHeight={135}
-                      onPress={() => {
-                        setAiOpen(false);
-                        if (rec.media_type === 'tv') {
-                          navigation.navigate('Series', { seriesId: rec.tmdb_id });
-                        } else {
-                          navigation.navigate('Movie', { movieId: rec.tmdb_id });
-                        }
-                      }}
-                    />
-                    <View style={styles.aiRecBody}>
-                      <View style={styles.aiCategoryBadgeWrap}>
-                        <View
-                          style={[
-                            styles.aiCategoryBadge,
-                            rec.category === 'strong_match' && styles.aiBadgeStrong,
-                            rec.category === 'diversity' && styles.aiBadgeDiversity,
-                            rec.category === 'hidden_gem' && styles.aiBadgeGem,
-                          ]}
-                        >
-                          <Text style={styles.aiCategoryBadgeText}>
-                            {rec.category === 'strong_match' && '🎯 Strong match'}
-                            {rec.category === 'diversity' && '🌀 Diversity'}
-                            {rec.category === 'hidden_gem' && '💎 Hidden gem'}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={styles.aiRecTitle} numberOfLines={1}>
-                        {rec.title} <Text style={styles.aiRecYear}>· {rec.year}</Text>
-                      </Text>
-                      <Text style={styles.aiRecReason} numberOfLines={3}>
-                        {rec.reasoning}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-
-                {aiModelUsed && (
-                  <Text style={styles.aiFooter}>Powered by {aiModelUsed}</Text>
-                )}
-              </ScrollView>
-            )}
-          </View>
         )}
       </View>
     </View>

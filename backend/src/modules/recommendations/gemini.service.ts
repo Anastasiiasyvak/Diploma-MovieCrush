@@ -8,7 +8,7 @@ const MAX_WAIT_MS = 25_000;
 const FALLBACK_WAIT_MS = 5_000;
 const BASE_BACKOFF_MS = 2_000;
 
-const MAX_OUTPUT_TOKENS = 8192;
+const MAX_OUTPUT_TOKENS = 16384;
 
 interface GeminiApiResponse {
   candidates?: Array<{

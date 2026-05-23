@@ -1,55 +1,12 @@
-interface CacheRow {
-  tmdb_id: number;
-  media_type: 'movie' | 'tv';
-  title: string | null;
-  poster_path: string | null;
-  release_year: number | null;
-  vote_average: number | null;
-}
-
-interface AlsItem {
-  tmdb_id: number;
-  media_type: 'movie' | 'tv';
-  title: string;
-  poster_path: string | null;
-  vote_average: number;
-  overview: string;
-  release_date: string;
-}
-
-
-const cacheRowToAlsItem = (id: number, cached: CacheRow): AlsItem => ({
-  tmdb_id: id,
-  media_type: cached.media_type,
-  title: cached.title!,
-  poster_path: cached.poster_path,
-  vote_average: cached.vote_average ?? 0,
-  overview: '',
-  release_date: cached.release_year ? `${cached.release_year}-01-01` : '',
-});
-
-const mediaTypeFromTmdb = (d: { title?: string; name?: string }): 'movie' | 'tv' =>
-  !!d.title ? 'movie' : 'tv';
-
-const releaseYearFromTmdb = (d: { release_date?: string; first_air_date?: string }): number | null => {
-  if (d.release_date) return parseInt(d.release_date.slice(0, 4), 10);
-  if (d.first_air_date) return parseInt(d.first_air_date.slice(0, 4), 10);
-  return null;
-};
-
-const sliceToLimit = (items: AlsItem[], limit = 25): AlsItem[] =>
-  items.slice(0, limit);
-
-const filterValidItems = (ids: number[], cacheMap: Map<number, CacheRow>): AlsItem[] => {
-  const result: AlsItem[] = [];
-  for (const id of ids) {
-    const cached = cacheMap.get(id);
-    if (!cached || !cached.title) continue;
-    result.push(cacheRowToAlsItem(id, cached));
-  }
-  return result;
-};
-
+import {
+  cacheRowToAlsItem,
+  mediaTypeFromTmdb,
+  releaseYearFromTmdb,
+  sliceToLimit,
+  filterValidItems,
+  type CacheRow,
+  type AlsItem,
+} from '../modules/recommendations/als_service';
 
 const makeCache = (tmdb_id: number, overrides: Partial<CacheRow> = {}): CacheRow => ({
   tmdb_id,

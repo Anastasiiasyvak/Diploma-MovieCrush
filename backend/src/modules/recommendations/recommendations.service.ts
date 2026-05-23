@@ -1,46 +1,37 @@
 import pool from '../../config/database';
 import { fetchFromTMDB } from '../tmdb/tmdb.service';
 import { callGemini, getModelName } from './gemini.service';
-import {
-  WatchedMovieForPrompt,
-  AiRecommendationItem,
-  AiRecommendationsResponse,
-  GeminiRawResponse,
-} from './recommendations.types';
+import { PersonalizedItem, PersonalizedResponse, TaggedItem } from './als_service';
+import { WatchedMovieForPrompt } from './recommendations.types';
 
 const CACHE_TTL_HOURS = 24;
-const MAX_WATCHED_IN_PROMPT = 75;        
-const OVERGENERATE_COUNT = 25;            
-const TARGET_RECOMMENDATIONS = 15;        
-const MIN_ACCEPTABLE = 5;                 
-const MAX_RETRY_ROUNDS = 1;             
+const WATCHED_SAMPLE_SIZE = 10;  
+const MIN_ACCEPTABLE = 5;
 
-// 1. Збір watched-списку для користувача
+interface WatchedRow extends WatchedMovieForPrompt {
+  _updatedAt: Date;
+}
 
-export const getAllWatchedMovies = async (
-  userId: number
-): Promise<WatchedMovieForPrompt[]> => {
+export const getAllWatchedMovies = async (userId: number): Promise<WatchedRow[]> => {
   const result = await pool.query(
-    `
-    SELECT
-      uma.tmdb_id,
-      uma.is_favorite,
-      uma.is_disliked,
-      uma.updated_at,
-      udr.overall_rating,
-      tmc.title AS cached_title
-    FROM user_movie_actions uma
-    LEFT JOIN user_detailed_ratings udr
-      ON udr.user_id = uma.user_id AND udr.tmdb_id = uma.tmdb_id
-    LEFT JOIN tmdb_media_cache tmc
-      ON tmc.tmdb_id = uma.tmdb_id AND tmc.media_type = 'movie'
-    WHERE uma.user_id = $1 AND uma.is_watched = TRUE
-    ORDER BY uma.updated_at DESC
-    `,
+    `SELECT
+       uma.tmdb_id,
+       uma.is_favorite,
+       uma.is_disliked,
+       uma.updated_at,
+       udr.overall_rating,
+       tmc.title AS cached_title
+     FROM user_movie_actions uma
+     LEFT JOIN user_detailed_ratings udr
+       ON udr.user_id = uma.user_id AND udr.tmdb_id = uma.tmdb_id
+     LEFT JOIN tmdb_media_cache tmc
+       ON tmc.tmdb_id = uma.tmdb_id AND tmc.media_type = 'movie'
+     WHERE uma.user_id = $1 AND uma.is_watched = TRUE
+     ORDER BY uma.updated_at DESC`,
     [userId]
   );
 
-  const movies: Array<WatchedMovieForPrompt & { _updatedAt: Date }> = [];
+  const movies: WatchedRow[] = [];
   for (const row of result.rows) {
     let title: string | null = row.cached_title;
     if (!title) {
@@ -52,7 +43,6 @@ export const getAllWatchedMovies = async (
       }
     }
     if (!title) continue;
-
     movies.push({
       title,
       rating: row.overall_rating !== null ? Number(row.overall_rating) : null,
@@ -65,303 +55,110 @@ export const getAllWatchedMovies = async (
   return movies;
 };
 
-
-export const selectWatchedForPrompt = (
-  all: Array<WatchedMovieForPrompt & { _updatedAt?: Date }>
+export const selectWatchedForRerank = (
+  all: WatchedRow[],
 ): WatchedMovieForPrompt[] => {
-  // Якщо влазимо - беремо все
-  if (all.length <= MAX_WATCHED_IN_PROMPT) {
-    return all.map(stripInternalFields);
-  }
+  if (all.length === 0) return [];
 
-  const seen = new Set<string>(); // dedup за назвою
-  const selected: typeof all = [];
+  const selected: WatchedRow[] = [];
+  const seen = new Set<string>();
 
-  const addUnique = (movie: typeof all[number]) => {
-    if (seen.has(movie.title)) return;
-    if (selected.length >= MAX_WATCHED_IN_PROMPT) return;
-    seen.add(movie.title);
-    selected.push(movie);
+  const addUnique = (m: WatchedRow): boolean => {
+    if (seen.has(m.title) || selected.length >= WATCHED_SAMPLE_SIZE) return false;
+    seen.add(m.title);
+    selected.push(m);
+    return true;
   };
 
-  // 1 Усі favorite (отримують найвищий пріоритет)
-  for (const m of all) {
-    if (m.is_favorite) addUnique(m);
+  for (let rating = 10; rating >= 1; rating--) {
+    const byRating = all
+      .filter(m => m.rating === rating)
+      .sort((a, b) => b._updatedAt.getTime() - a._updatedAt.getTime());
+    if (byRating.length > 0) addUnique(byRating[0]);
+    if (selected.length >= WATCHED_SAMPLE_SIZE) break;
   }
 
-  // 2 Усі disliked
-  for (const m of all) {
-    if (m.is_disliked) addUnique(m);
+  const byRecent = [...all].sort((a, b) => b._updatedAt.getTime() - a._updatedAt.getTime());
+  for (const m of byRecent) {
+    if (selected.length >= WATCHED_SAMPLE_SIZE) break;
+    addUnique(m);
   }
 
-  // 3. Топ за рейтингом (rating >= 7), сортовані за спаданням
-  const ratedHigh = all
-    .filter((m) => m.rating !== null && m.rating >= 7 && !m.is_favorite && !m.is_disliked)
-    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
-  for (const m of ratedHigh) addUnique(m);
-
-  // 4. Решта рейтингованих (середні оцінки) 
-  const ratedRest = all
-    .filter((m) => m.rating !== null && m.rating < 7 && !m.is_favorite && !m.is_disliked)
-    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
-  for (const m of ratedRest) addUnique(m);
-
-  // 5 Найсвіжіші watched-without-rating
-  const unrated = all
-    .filter((m) => m.rating === null && !m.is_favorite && !m.is_disliked)
-    .sort((a, b) => {
-      const da = a._updatedAt?.getTime() ?? 0;
-      const db = b._updatedAt?.getTime() ?? 0;
-      return db - da;
-    });
-  for (const m of unrated) addUnique(m);
-
-  return selected.map(stripInternalFields);
+  return selected.map(({ title, rating, is_favorite, is_disliked }) => ({
+    title, rating, is_favorite, is_disliked,
+  }));
 };
 
-const stripInternalFields = (
-  m: WatchedMovieForPrompt & { _updatedAt?: Date }
-): WatchedMovieForPrompt => ({
-  title: m.title,
-  rating: m.rating,
-  is_favorite: m.is_favorite,
-  is_disliked: m.is_disliked,
-});
 
-
-export const getExcludedTmdbIds = async (userId: number): Promise<Set<number>> => {
-  const result = await pool.query(
-    `SELECT DISTINCT tmdb_id FROM user_movie_actions
-     WHERE user_id = $1 AND (is_watched = TRUE OR is_disliked = TRUE)`,
-    [userId]
-  );
-  return new Set(result.rows.map((r) => Number(r.tmdb_id)));
-};
-
-// 2. Формування промту
-
-const formatMovieLine = (m: WatchedMovieForPrompt): string => {
-  const parts: string[] = [`"${m.title}"`];
-  if (m.rating !== null) parts.push(`rating ${m.rating}/10`);
-  if (m.is_favorite) parts.push('favorite ❤');
-  if (m.is_disliked) parts.push('disliked 👎');
-  return `- ${parts.join(' | ')}`;
-};
-
-export const buildPrompt = (
+const buildRerankPrompt = (
+  candidates: TaggedItem[],
   watched: WatchedMovieForPrompt[],
   totalWatchedCount: number,
-  excludeFromPreviousRound: string[] = []
 ): string => {
   const watchedBlock = watched.length
-    ? watched.map(formatMovieLine).join('\n')
-    : '(no watched movies yet)';
+    ? watched.map(m => {
+        const parts = [`"${m.title}"`];
+        if (m.rating !== null) parts.push(`${m.rating}/10`);
+        if (m.is_favorite) parts.push('fav');
+        if (m.is_disliked) parts.push('disliked');
+        return `- ${parts.join(' | ')}`;
+      }).join('\n')
+    : '(no rated movies yet)';
 
-  const samplingNote =
-    totalWatchedCount > watched.length
-      ? `\n\nNOTE: The user has watched ${totalWatchedCount} movies in total. ` +
-        `This list shows the ${watched.length} most representative ones, ` +
-        `prioritizing favorites, dislikes, and highly-rated titles.`
-      : '';
-
-  const excludeBlock = excludeFromPreviousRound.length
-    ? `\n\nDO NOT recommend these (already suggested and filtered out):\n${excludeFromPreviousRound
-        .map((t) => `- "${t}"`)
-        .join('\n')}`
+  const samplingNote = totalWatchedCount > watched.length
+    ? `\nShowing ${watched.length} strongest signals out of ${totalWatchedCount} total watched.`
     : '';
 
-  return `You are MovieCrush, a film recommendation expert for a mobile app.
+  const candidatesBlock = candidates
+    .map((c, i) =>
+      `${i + 1}. [${c.source.toUpperCase()}] id:${c.tmdb_id} | "${c.title}" | ${c.vote_average.toFixed(1)}`
+    )
+    .join('\n');
 
-Your task: analyze the user's taste profile based on their watched movies and recommend exactly ${OVERGENERATE_COUNT} movies they have NOT watched yet.
+  return `You are MovieCrush - a senior film taste expert inside a movie tracking app.
 
-═══════════════════════════════════════════════
-STEP 1 — Analyze the user's taste signals
-═══════════════════════════════════════════════
-Before recommending, think step by step:
+Your job: from the candidate list below, pick exactly 15 movies that will feel most rewarding for this specific user.
+If the candidate pool has fewer than 15 items, return all of them.
+Only return fewer than 15 if you genuinely cannot find more good matches - minimum 5.
 
-1.1 Extract patterns from the watched list:
-- Which genres appear most frequently?
-- Which movies are rated highest (8-10/10) and which are favorites? Those are the strongest taste signals.
-- Which movies are disliked? Avoid anything stylistically similar to those.
-- Which decades / countries / directors / actors appear repeatedly in highly-rated movies?
+WHAT THIS USER WATCHES & RATES
+${watchedBlock}${samplingNote}
 
-1.2 Identify gaps and opportunities:
-- Which genres are missing but would plausibly fit?
-- What unusual common threads run through the favorites?
+CANDIDATE POOL — ${candidates.length} movies
+${candidatesBlock}
 
-1.3 Formalize taste signature internally (do not output it):
-A 1-2 sentence summary of this user's cinematic identity.
+[ALS] = recommended by collaborative filtering (users with similar taste rated these highly)
+[DISCOVER] = matched by this user's most-watched genres and favorite actor
 
-═══════════════════════════════════════════════
-USER PROFILE — Watched movies
-═══════════════════════════════════════════════
-Movies in this prompt: ${watched.length}${samplingNote}
+SELECTION RULES
 
-Each movie shows: title | rating (1-10, if user rated it) | favorite/disliked flags.
-Movies without a rating are simply marked as watched.
+1. Target 15 results. Return all candidates if pool ≤ 15.
+2. Use each tmdb_id EXACTLY as listed - never invent or modify ids.
+3. Skip anything stylistically close to a disliked title.
+4. Keep genre diversity - no more than 8 titles from the same genre.
+5. Prioritise [ALS] titles; use [DISCOVER] to fill diversity gaps.
+6. Assign every title one category:
+   • strong_match  - clearly fits the user's established taste
+   • diversity - different from usual but plausibly enjoyable
+   • hidden_gem - lesser-known or underrated pick worth discovering
+7. Target composition: ~60 % strong_match · ~25 % diversity · ~15 % hidden_gem
 
-${watchedBlock}${excludeBlock}
+OUTPUT FORMAT
 
-═══════════════════════════════════════════════
-STEP 2 — Recommend ${OVERGENERATE_COUNT} movies the user has NOT watched
-═══════════════════════════════════════════════
-
-We over-generate ${OVERGENERATE_COUNT} candidates so the backend can filter out any the user already watched.
-Aim for breadth and quality — every recommendation should be defensible.
-
-Composition guidance (approximate):
-- ~${Math.round(OVERGENERATE_COUNT * 0.65)} → strong_match (closely match the user's taste signature)
-- ~${Math.round(OVERGENERATE_COUNT * 0.20)} → diversity (different but plausibly enjoyable — prevents echo chamber)
-- ~${Math.round(OVERGENERATE_COUNT * 0.15)} → hidden_gem (lesser-known or international cinema)
-
-Constraints:
-- DO NOT include any movie from the watched list above.
-- DO NOT include any movie marked as disliked.
-- No duplicate recommendations.
-- Year range: 1960-2026 (unless the user shows strong decade preference).
-- Each movie must be REAL and verifiable (correct title + correct year).
-- Reasoning must reference SPECIFIC signals from this user's data.
-
-═══════════════════════════════════════════════
-OUTPUT FORMAT — STRICT JSON ONLY
-═══════════════════════════════════════════════
-
-Respond with ONLY valid JSON. No markdown. No code fences. No commentary.
-Start with { and end with }.
-
-{
-  "recommendations": [
-    {
-      "title": "Movie Title",
-      "year": 2024,
-      "category": "strong_match",
-      "reasoning": "why this fits THIS specific user (max 30 words, reference their data)",
-      "why_this_will_work": "which exact user signal triggered this (max 20 words)"
-    }
-  ]
-}`;
+Respond with VALID JSON ONLY. No markdown fences, no keys outside the object.
+{"recommendations":[{"tmdb_id":123,"category":"strong_match"}]}`;
 };
 
-// 3. Матчінг рекомендацій з TMDB
-
-interface TmdbSearchResult {
-  results: Array<{
-    id: number;
-    title: string;
-    release_date?: string;
-    poster_path?: string | null;
-    vote_average?: number;
-    overview?: string;
-  }>;
-}
-
-const matchOnTmdb = async (
-  title: string,
-  year: number
-): Promise<{
-  tmdb_id: number;
-  poster_path: string | null;
-  vote_average: number;
-  overview: string;
-} | null> => {
-  try {
-    const data = await fetchFromTMDB<TmdbSearchResult>('/search/movie', {
-      query: title,
-      year: year,
-    });
-
-    if (!data.results || data.results.length === 0) {
-      const fallback = await fetchFromTMDB<TmdbSearchResult>('/search/movie', {
-        query: title,
-      });
-      if (!fallback.results || fallback.results.length === 0) return null;
-
-      const best = fallback.results
-        .filter((r) => r.release_date)
-        .sort((a, b) => {
-          const ya = parseInt(a.release_date!.slice(0, 4), 10);
-          const yb = parseInt(b.release_date!.slice(0, 4), 10);
-          return Math.abs(ya - year) - Math.abs(yb - year);
-        })[0];
-
-      if (!best) return null;
-      return {
-        tmdb_id: best.id,
-        poster_path: best.poster_path ?? null,
-        vote_average: best.vote_average ?? 0,
-        overview: best.overview ?? '',
-      };
-    }
-
-    const top = data.results[0];
-    return {
-      tmdb_id: top.id,
-      poster_path: top.poster_path ?? null,
-      vote_average: top.vote_average ?? 0,
-      overview: top.overview ?? '',
-    };
-  } catch (err) {
-    console.error(`TMDB match failed for "${title}" (${year}):`, err);
-    return null;
-  }
-};
-
-// 4) Збагачення + фільтрація
-
-const enrichAndFilter = async (
-  raw: GeminiRawResponse,
-  excludedTmdbIds: Set<number>,
-  alreadyKept: AiRecommendationItem[]
-): Promise<{
-  kept: AiRecommendationItem[];
-  rejectedTitles: string[];
-}> => {
-  const kept: AiRecommendationItem[] = [...alreadyKept];
-  const keptIds = new Set(kept.map((k) => k.tmdb_id).filter(Boolean) as number[]);
-  const rejectedTitles: string[] = [];
-
-  for (const rec of raw.recommendations) {
-    const match = await matchOnTmdb(rec.title, rec.year);
-
-    if (!match) {
-      rejectedTitles.push(rec.title);
-      continue;
-    }
-    if (excludedTmdbIds.has(match.tmdb_id)) {
-      rejectedTitles.push(rec.title);
-      continue;
-    }
-    if (keptIds.has(match.tmdb_id)) continue; // dedup
-
-    keptIds.add(match.tmdb_id);
-    kept.push({
-      title: rec.title,
-      year: rec.year,
-      category: rec.category,
-      reasoning: rec.reasoning,
-      why_this_will_work: rec.why_this_will_work,
-      tmdb_id: match.tmdb_id,
-      media_type: 'movie',
-      poster_path: match.poster_path,
-      vote_average: match.vote_average,
-      overview: match.overview,
-    });
-  }
-
-  return { kept, rejectedTitles };
-};
-
-// 5 Кеш
 
 interface CachedRow {
-  recommendations: AiRecommendationItem[];
+  recommendations: PersonalizedItem[];
   model_used: string;
   watched_count: number;
   created_at: Date;
   expires_at: Date;
 }
 
-const getCachedRecommendations = async (userId: number): Promise<CachedRow | null> => {
+const getCachedPersonalized = async (userId: number): Promise<CachedRow | null> => {
   const result = await pool.query(
     `SELECT recommendations, model_used, watched_count, created_at, expires_at
      FROM user_ai_recommendations
@@ -381,11 +178,11 @@ const getCachedRecommendations = async (userId: number): Promise<CachedRow | nul
   };
 };
 
-const saveRecommendationsToCache = async (
+const savePersonalizedToCache = async (
   userId: number,
-  recommendations: AiRecommendationItem[],
+  recommendations: PersonalizedItem[],
   modelUsed: string,
-  watchedCount: number
+  watchedCount: number,
 ): Promise<void> => {
   await pool.query(`DELETE FROM user_ai_recommendations WHERE user_id = $1`, [userId]);
   await pool.query(
@@ -396,97 +193,162 @@ const saveRecommendationsToCache = async (
   );
 };
 
-// 6) Public entry-point
 
-export const getAiRecommendationsForUser = async (
+interface GeminiRerankResponse {
+  recommendations: Array<{
+    tmdb_id: number;
+    category: 'strong_match' | 'diversity' | 'hidden_gem';
+  }>;
+}
+
+export const rerankWithGemini = async (
   userId: number,
-  forceRefresh = false
-): Promise<AiRecommendationsResponse> => {
-  if (!forceRefresh) {
-    const cached = await getCachedRecommendations(userId);
-    if (cached) {
-      return {
-        recommendations: cached.recommendations,
-        model_used: cached.model_used,
-        watched_count: cached.watched_count,
-        cached: true,
-        computed_at: cached.created_at.toISOString(),
-      };
-    }
+  candidates: TaggedItem[],
+  watchedCount: number,
+): Promise<PersonalizedResponse> => {
+  const cached = await getCachedPersonalized(userId);
+  if (cached) {
+    console.log(`[Rerank] Cache hit for user ${userId} (expires: ${cached.expires_at.toISOString()})`);
+    return {
+      recommendations: cached.recommendations,
+      strategy: 'personalized',
+      watched_count: cached.watched_count,
+      cached: true,
+      computed_at: cached.created_at.toISOString(),
+      model_used: cached.model_used,
+    };
+  }
+
+  if (candidates.length === 0) {
+    throw new Error('No candidates to rerank');
   }
 
   const allWatched = await getAllWatchedMovies(userId);
+  const watchedSample = selectWatchedForRerank(allWatched);
 
-  if (allWatched.length === 0) {
-    throw new Error(
-      'No watched movies yet. Mark some movies as watched first to get personalized AI recommendations.'
-    );
+  console.log(`\n${'─'.repeat(60)}`);
+  console.log(`[Rerank] User ${userId} | candidates: ${candidates.length} | watched sample: ${watchedSample.length}/${allWatched.length}`);
+
+  const alsItems = candidates.filter(c => c.source === 'als');
+  const discoverItems = candidates.filter(c => c.source === 'discover');
+
+  console.log(`\n[Rerank] ALS candidates (${alsItems.length}):`);
+  for (const c of alsItems) {
+    console.log(`  [ALS] tmdb_id:${c.tmdb_id} | "${c.title}" | ${c.vote_average.toFixed(1)} | ${c.media_type}`);
   }
 
-  const sampledWatched = selectWatchedForPrompt(allWatched);
-  console.log(
-    `[AI Recs] User ${userId}: ${allWatched.length} total watched, ` +
-      `${sampledWatched.length} selected for prompt`
-  );
+  console.log(`\n[Rerank] Discover candidates (${discoverItems.length}):`);
+  for (const c of discoverItems) {
+    console.log(`  [DISC] tmdb_id:${c.tmdb_id} | "${c.title}" | ${c.vote_average.toFixed(1)} | ${c.media_type}`);
+  }
 
-  const excluded = await getExcludedTmdbIds(userId);
+  console.log(`\n[Rerank] Watched sample for context (${watchedSample.length}/${allWatched.length} total):`);
+  for (const m of watchedSample) {
+    const parts: string[] = [];
+    if (m.rating !== null) parts.push(`${m.rating}/10`);
+    if (m.is_favorite) parts.push('fav');
+    if (m.is_disliked) parts.push('disliked');
+    console.log(`  "${m.title}"${parts.length ? ' | ' + parts.join(' | ') : ''}`);
+  }
 
-  let kept: AiRecommendationItem[] = [];
-  let rejectedTitles: string[] = [];
+  const prompt = buildRerankPrompt(candidates, watchedSample, watchedCount);
+  console.log(`\n[Rerank] Prompt length: ${prompt.length} chars → sending to Gemini...`);
 
-  const firstPrompt = buildPrompt(sampledWatched, allWatched.length);
-  const firstRaw = await callGemini(firstPrompt);
-  const firstResult = await enrichAndFilter(firstRaw, excluded, kept);
-  kept = firstResult.kept;
-  rejectedTitles = firstResult.rejectedTitles;
+  let rerankResult: GeminiRerankResponse;
+  try {
+    rerankResult = await callGemini(prompt) as unknown as GeminiRerankResponse;
+  } catch (err) {
+    console.error('[Rerank] Gemini failed, using ALS-priority fallback:', err);
+    // Fallback: ALS в пріоритеті (вже відсортований за cf моделюю) Discover тільки добирає якщо ALS не вистачило до 25
+    const alsCandidates = candidates.filter(c => c.source === 'als');
+    const discoverCandidates = candidates.filter(c => c.source === 'discover');
+    const fallbackPool = [...alsCandidates, ...discoverCandidates].slice(0, 15);
+    console.log(`[Rerank] Fallback pool: ${alsCandidates.length} ALS + ${Math.max(0, 15 - alsCandidates.length)} Discover`);
+    const fallback: PersonalizedItem[] = fallbackPool.map(c => ({
+      tmdb_id: c.tmdb_id,
+      media_type: c.media_type,
+      title: c.title,
+      poster_path: c.poster_path,
+      vote_average: c.vote_average,
+      overview: c.overview,
+      release_date: c.release_date,
+      category: 'strong_match' as const,
+    }));
+    return {
+      recommendations: fallback,
+      strategy: 'personalized',
+      watched_count: watchedCount,
+      cached: false,
+      computed_at: new Date().toISOString(),
+      model_used: 'fallback',
+    };
+  }
 
-  console.log(
-    `[AI Recs] First round: requested ${OVERGENERATE_COUNT}, ` +
-      `got ${firstRaw.recommendations.length}, kept ${kept.length} after filtering`
-  );
+  const candidateMap = new Map(candidates.map(c => [c.tmdb_id, c]));
+  const reranked: PersonalizedItem[] = [];
 
-  if (kept.length < MIN_ACCEPTABLE) {
-    console.warn(
-      `[AI Recs] Only ${kept.length} usable recs (< ${MIN_ACCEPTABLE}). Regenerating once.`
-    );
+  console.log(`\n[Rerank] Gemini returned ${rerankResult.recommendations?.length ?? 0} items:`);
 
-    for (let retry = 0; retry < MAX_RETRY_ROUNDS; retry += 1) {
-      const retryPrompt = buildPrompt(sampledWatched, allWatched.length, [
-        ...rejectedTitles,
-        ...kept.map((k) => k.title),
-      ]);
-      try {
-        const retryRaw = await callGemini(retryPrompt);
-        const retryResult = await enrichAndFilter(retryRaw, excluded, kept);
-        kept = retryResult.kept;
-        rejectedTitles = [...rejectedTitles, ...retryResult.rejectedTitles];
+  const categoryCount = { strong_match: 0, diversity: 0, hidden_gem: 0 };
 
-        console.log(
-          `[AI Recs] Retry ${retry + 1}: kept ${kept.length} after filtering`
-        );
+  for (const rec of rerankResult.recommendations ?? []) {
+    const candidate = candidateMap.get(rec.tmdb_id);
+    if (!candidate) {
+      console.warn(`  Unknown tmdb_id ${rec.tmdb_id} — skipping`);
+      continue;
+    }
+    const cat = rec.category ?? 'strong_match';
+    categoryCount[cat] = (categoryCount[cat] ?? 0) + 1;
+    console.log(`  [${cat}] [${candidate.source.toUpperCase()}] tmdb_id:${rec.tmdb_id} "${candidate.title}"`);
+    reranked.push({
+      tmdb_id: candidate.tmdb_id,
+      media_type: candidate.media_type,
+      title: candidate.title,
+      poster_path: candidate.poster_path,
+      vote_average: candidate.vote_average,
+      overview: candidate.overview,
+      release_date: candidate.release_date,
+      category: cat,
+    });
+  }
 
-        if (kept.length >= MIN_ACCEPTABLE) break;
-      } catch (err) {
-        console.error(`[AI Recs] Retry round ${retry + 1} failed:`, err);
-        break;
+  console.log(`\n[Rerank] Categories: strong_match=${categoryCount.strong_match} diversity=${categoryCount.diversity} hidden_gem=${categoryCount.hidden_gem}`);
+
+  // Fallback padding якщо дуже мало
+  if (reranked.length < MIN_ACCEPTABLE) {
+    console.warn(`[Rerank] Only ${reranked.length} usable results (min: ${MIN_ACCEPTABLE}), padding...`);
+    const usedIds = new Set(reranked.map(r => r.tmdb_id));
+    for (const c of candidates) {
+      if (reranked.length >= 15) break;
+      if (!usedIds.has(c.tmdb_id)) {
+        console.log(`  + padding [${c.source.toUpperCase()}] tmdb_id:${c.tmdb_id} "${c.title}"`);
+        reranked.push({
+          tmdb_id: c.tmdb_id,
+          media_type: c.media_type,
+          title: c.title,
+          poster_path: c.poster_path,
+          vote_average: c.vote_average,
+          overview: c.overview,
+          release_date: c.release_date,
+          category: 'strong_match',
+        });
+        usedIds.add(c.tmdb_id);
       }
     }
   }
 
-  kept = kept.slice(0, TARGET_RECOMMENDATIONS);
-
-  if (kept.length === 0) {
-    throw new Error('Could not produce any valid recommendations. Try again later.');
-  }
-
   const modelUsed = getModelName();
-  await saveRecommendationsToCache(userId, kept, modelUsed, allWatched.length);
+  await savePersonalizedToCache(userId, reranked, modelUsed, watchedCount);
+
+  console.log(`[Rerank] Final: ${reranked.length} recommendations saved to cache (TTL: ${CACHE_TTL_HOURS}h, table: user_ai_recommendations)`);
+  console.log(`${'═'.repeat(60)}\n`);
 
   return {
-    recommendations: kept,
-    model_used: modelUsed,
-    watched_count: allWatched.length,
+    recommendations: reranked,
+    strategy: 'personalized',
+    watched_count: watchedCount,
     cached: false,
     computed_at: new Date().toISOString(),
+    model_used: modelUsed,
   };
 };
