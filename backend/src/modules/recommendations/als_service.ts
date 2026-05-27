@@ -235,7 +235,10 @@ const enrichWithDetails = async (tmdbIds: number[]): Promise<AlsItem[]> => {
   if (missingIds.length > 0) {
     const fetchJobs = missingIds.map(id =>
       fetchFromTMDB<TmdbDetails>(`/movie/${id}`)
-        .catch(() => fetchFromTMDB<TmdbDetails>(`/tv/${id}`).catch(() => null))
+        .catch(() => fetchFromTMDB<TmdbDetails>(`/tv/${id}`).catch((err) => {
+          console.warn(`[ALS] TMDB details failed for id ${id} (movie+tv):`, err);
+          return null;
+        }))
     );
     const fetched = await Promise.all(fetchJobs);
 
@@ -299,28 +302,28 @@ const fetchDiscoverCandidates = async (
     // Звичайні фільми — виключаємо анімацію (16) та ja/ko-мову,
     // щоб аніме/азійський контент не лізли у фільмовий бакет
     if (allowedBuckets.has('movie')) {
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: genreStr, without_genres: '99,16', without_original_language: 'ja,ko', page: '1' }).catch(() => ({ results: [] })));
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: genreStr, without_genres: '99,16', without_original_language: 'ja,ko', page: '2' }).catch(() => ({ results: [] })));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: genreStr, without_genres: '99,16', without_original_language: 'ja,ko', page: '1' }).catch((err) => { console.warn('[ALS] TMDB discover failed, using empty fallback:', err); return { results: [] }; }));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: genreStr, without_genres: '99,16', without_original_language: 'ja,ko', page: '2' }).catch((err) => { console.warn('[ALS] TMDB discover failed, using empty fallback:', err); return { results: [] }; }));
     }
     // Аніме фільми
     if (allowedBuckets.has('anime_movie')) {
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: '16', with_original_language: 'ja', page: '1' }).catch(() => ({ results: [] })));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: '16', with_original_language: 'ja', page: '1' }).catch((err) => { console.warn('[ALS] TMDB discover failed, using empty fallback:', err); return { results: [] }; }));
     }
     // Анімація (не аніме)
     if (allowedBuckets.has('animation')) {
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: '16', without_original_language: 'ja', page: '1' }).catch(() => ({ results: [] })));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: '16', without_original_language: 'ja', page: '1' }).catch((err) => { console.warn('[ALS] TMDB discover failed, using empty fallback:', err); return { results: [] }; }));
     }
     // Звичайні серіали
     if (allowedBuckets.has('tv')) {
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', { ...baseTvParams, with_genres: genreStr, without_genres: '99,16', without_original_language: 'ja,ko', page: '1' }).catch(() => ({ results: [] })));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', { ...baseTvParams, with_genres: genreStr, without_genres: '99,16', without_original_language: 'ja,ko', page: '1' }).catch((err) => { console.warn('[ALS] TMDB discover failed, using empty fallback:', err); return { results: [] }; }));
     }
     // Аніме серіали
     if (allowedBuckets.has('anime')) {
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', { ...baseTvParams, with_genres: '16', with_original_language: 'ja', page: '1' }).catch(() => ({ results: [] })));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', { ...baseTvParams, with_genres: '16', with_original_language: 'ja', page: '1' }).catch((err) => { console.warn('[ALS] TMDB discover failed, using empty fallback:', err); return { results: [] }; }));
     }
     // Дорама
     if (allowedBuckets.has('dorama')) {
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', { ...baseTvParams, with_genres: genreStr, with_original_language: 'ko', page: '1' }).catch(() => ({ results: [] })));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', { ...baseTvParams, with_genres: genreStr, with_original_language: 'ko', page: '1' }).catch((err) => { console.warn('[ALS] TMDB discover failed, using empty fallback:', err); return { results: [] }; }));
     }
   }
 
@@ -332,7 +335,7 @@ const fetchDiscoverCandidates = async (
         ...baseMovieParams,
         with_cast: String(topActorId),
         sort_by: 'popularity.desc',
-      }).catch(() => ({ results: [] }))
+      }).catch((err) => { console.warn('[ALS] TMDB discover failed, using empty fallback:', err); return { results: [] }; })
     );
   }
 

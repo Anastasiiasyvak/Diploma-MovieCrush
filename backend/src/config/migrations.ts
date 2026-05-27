@@ -512,8 +512,9 @@ const createTables = async () => {
 
     await pool.query(`
       ALTER TABLE tmdb_media_cache 
-        ADD COLUMN IF NOT EXISTS vote_average DECIMAL(4,2) DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS vote_average DECIMAL(4,2) DEFAULT 0;
     `);
+    console.log('vote_average column ready');
     console.log('All tables created successfully');
 
   } catch (err) {

@@ -1,13 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from contextlib import asynccontextmanager
-from model import get_recommendations, train_model, load_model
+from model import get_recommendations, train_model, get_cached_model
 import uvicorn
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Loading ALS model...", flush=True)
     try:
-        model, user_to_idx, item_to_idx, idx_to_item, matrix = load_model()
+        model, user_to_idx, item_to_idx, idx_to_item, matrix = get_cached_model()
         print(f"Model ready! Users: {len(user_to_idx)}, Items: {len(item_to_idx)}", flush=True)
         print(f"Matrix shape: {matrix.shape}", flush=True)
     except Exception as e:
@@ -54,7 +54,7 @@ def recommend(user_id: int, n: int = 40):
 def info():
     """Debug endpoint to see model info"""
     try:
-        model, user_to_idx, item_to_idx, idx_to_item, matrix = load_model()
+        model, user_to_idx, item_to_idx, idx_to_item, matrix = get_cached_model()
         return {
             "users": len(user_to_idx),
             "items": len(item_to_idx),

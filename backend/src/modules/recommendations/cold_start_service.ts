@@ -258,7 +258,7 @@ const fetchByActors = async (
       };
       if (minVoteAvg) params['vote_average.gte'] = minVoteAvg;
       return fetchFromTMDB<TmdbDiscoverResult>(endpoint, params)
-        .catch(() => ({ results: [] as TmdbDiscoverResult['results'] }));
+        .catch((err) => { console.warn('[ColdStart] TMDB fetch failed, using empty fallback:', err); return { results: [] as TmdbDiscoverResult['results'] }; });
     });
     return Promise.all(pageJobs).then(pages => pages.flatMap(p => p.results ?? []));
   });
@@ -297,7 +297,7 @@ const fetchByActors = async (
       };
       if (minVoteAvg) params['vote_average.gte'] = minVoteAvg;
       return fetchFromTMDB<TmdbDiscoverResult>(endpoint, params)
-        .catch(() => ({ results: [] as TmdbDiscoverResult['results'] }));
+        .catch((err) => { console.warn('[ColdStart] TMDB fetch failed, using empty fallback:', err); return { results: [] as TmdbDiscoverResult['results'] }; });
     });
     const fallbackResults = await Promise.all(fallbackJobs);
     for (const r of fallbackResults) {
@@ -350,39 +350,39 @@ const fetchByGenres = async (
       jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', baseParams({
         without_genres: '99,16',
         without_original_language: 'ja,ko',
-      }, p)).catch(() => ({ results: [] })));
+      }, p)).catch((err) => { console.warn('[ColdStart] TMDB fetch failed, using empty fallback:', err); return { results: [] }; }));
     }
     if (allowedBuckets.has('animation')) {
       jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', baseParams({
         with_genres: '16',
         without_original_language: 'ja',
         without_keywords: '210024',
-      }, p)).catch(() => ({ results: [] })));
+      }, p)).catch((err) => { console.warn('[ColdStart] TMDB fetch failed, using empty fallback:', err); return { results: [] }; }));
     }
     if (allowedBuckets.has('anime_movie')) {
       jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', {
         with_genres: '16', with_original_language: 'ja',
         sort_by: 'vote_average.desc', 'vote_count.gte': '100', page: p,
-      }).catch(() => ({ results: [] })));
+      }).catch((err) => { console.warn('[ColdStart] TMDB fetch failed, using empty fallback:', err); return { results: [] }; }));
     }
     if (allowedBuckets.has('tv')) {
       jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', baseParams({
         without_genres: '99,16',
         without_keywords: '210024',
         without_original_language: 'ja,ko',
-      }, p)).catch(() => ({ results: [] })));
+      }, p)).catch((err) => { console.warn('[ColdStart] TMDB fetch failed, using empty fallback:', err); return { results: [] }; }));
     }
     if (allowedBuckets.has('anime')) {
       jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', {
         with_genres: '16', with_original_language: 'ja',
         sort_by: 'vote_average.desc', 'vote_count.gte': '100', page: p,
-      }).catch(() => ({ results: [] })));
+      }).catch((err) => { console.warn('[ColdStart] TMDB fetch failed, using empty fallback:', err); return { results: [] }; }));
     }
     if (allowedBuckets.has('dorama')) {
       jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', {
         with_genres: '18', with_original_language: 'ko',
         sort_by: 'vote_average.desc', 'vote_count.gte': '100', page: p,
-      }).catch(() => ({ results: [] })));
+      }).catch((err) => { console.warn('[ColdStart] TMDB fetch failed, using empty fallback:', err); return { results: [] }; }));
     }
   }
 
@@ -429,41 +429,41 @@ const fetchPopularByBuckets = async (
     jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', discoverParams({
       without_genres: '99,16',
       without_original_language: 'ja,ko',
-    })).catch(() => ({ results: [] })));
+    })).catch((err) => { console.warn('[ColdStart] TMDB fetch failed, using empty fallback:', err); return { results: [] }; }));
   }
   if (allowedBuckets.has('animation')) {
     jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', discoverParams({
       with_genres: '16',
       without_original_language: 'ja',
       without_keywords: '210024',
-    })).catch(() => ({ results: [] })));
+    })).catch((err) => { console.warn('[ColdStart] TMDB fetch failed, using empty fallback:', err); return { results: [] }; }));
   }
   if (allowedBuckets.has('anime_movie')) {
     jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', {
       with_genres: '16', with_original_language: 'ja', sort_by: 'vote_average.desc', 'vote_count.gte': '100', page,
-    }).catch(() => ({ results: [] })));
+    }).catch((err) => { console.warn('[ColdStart] TMDB fetch failed, using empty fallback:', err); return { results: [] }; }));
   }
   if (allowedBuckets.has('tv')) {
     jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', discoverParams({
       without_genres: '99,16',
       without_keywords: '210024',
       without_original_language: 'ja,ko',
-    })).catch(() => ({ results: [] })));
+    })).catch((err) => { console.warn('[ColdStart] TMDB fetch failed, using empty fallback:', err); return { results: [] }; }));
   }
   if (allowedBuckets.has('anime')) {
     jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', {
       with_genres: '16', with_original_language: 'ja', sort_by: 'vote_average.desc', 'vote_count.gte': '100', page,
-    }).catch(() => ({ results: [] })));
+    }).catch((err) => { console.warn('[ColdStart] TMDB fetch failed, using empty fallback:', err); return { results: [] }; }));
   }
   if (allowedBuckets.has('dorama')) {
     jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', {
       with_genres: '18', with_original_language: 'ko', sort_by: 'vote_average.desc', 'vote_count.gte': '100', page,
-    }).catch(() => ({ results: [] })));
+    }).catch((err) => { console.warn('[ColdStart] TMDB fetch failed, using empty fallback:', err); return { results: [] }; }));
   }
 
   const usedGenericPopular = jobs.length === 0;
   if (usedGenericPopular) {
-    jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/movie/popular', { page }).catch(() => ({ results: [] })));
+    jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/movie/popular', { page }).catch((err) => { console.warn('[ColdStart] TMDB fetch failed, using empty fallback:', err); return { results: [] }; }));
   }
 
   const results = await Promise.all(jobs);
@@ -483,7 +483,7 @@ const fetchPopularByBuckets = async (
 
 const fetchPopularFallback = async (seed: number, excludedIds: Set<number>): Promise<ColdStartItem[]> => {
   const page = String((seed % 10) + 1);
-  const data = await fetchFromTMDB<TmdbDiscoverResult>('/movie/popular', { page }).catch(() => ({ results: [] }));
+  const data = await fetchFromTMDB<TmdbDiscoverResult>('/movie/popular', { page }).catch((err) => { console.warn('[ColdStart] TMDB fetch failed, using empty fallback:', err); return { results: [] }; });
   return (data.results ?? []).filter(item => !excludedIds.has(item.id)).map(tmdbItemToColdStart);
 };
 

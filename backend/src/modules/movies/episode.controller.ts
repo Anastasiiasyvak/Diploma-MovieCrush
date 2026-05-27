@@ -35,7 +35,9 @@ export const toggleEpisode = async (req: AuthRequest, res: Response) => {
       episode_tmdb_id, total_episodes_in_series, total_seasons_in_series,
     });
     
-    cacheMediaIfNeeded(series_tmdb_id, 'tv').catch(() => {});
+    cacheMediaIfNeeded(series_tmdb_id, 'tv').catch((err) => {
+      console.error('cacheMediaIfNeeded failed for series', series_tmdb_id, err);
+    });
 
     res.json(result);
   } catch (err) {

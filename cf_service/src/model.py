@@ -96,6 +96,10 @@ def train_model():
         pickle.dump(matrix, f)
 
     print("Model saved!", flush=True)
+
+    global _cached_model
+    _cached_model = (model, user_to_idx, item_to_idx, idx_to_item, matrix)
+
     return model, user_to_idx, item_to_idx, idx_to_item, matrix
 
 
@@ -114,9 +118,18 @@ def load_model():
 
     return model, user_to_idx, item_to_idx, idx_to_item, matrix
 
+_cached_model = None
+
+
+def get_cached_model():
+    global _cached_model
+    if _cached_model is None:
+        _cached_model = load_model()
+    return _cached_model
+
 
 def get_recommendations(user_id: int, n: int = 40) -> list[int]:
-    model, user_to_idx, item_to_idx, idx_to_item, matrix = load_model()
+    model, user_to_idx, item_to_idx, idx_to_item, matrix = get_cached_model()
 
     if user_id not in user_to_idx:
         print(f"User {user_id} not found in training data", flush=True)

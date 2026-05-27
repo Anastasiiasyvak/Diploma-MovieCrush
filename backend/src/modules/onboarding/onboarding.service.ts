@@ -38,76 +38,89 @@ export const completeOnboarding = async (
 ): Promise<void> => {
   const { liked_actor_ids, watched_tmdb_ids, ratings } = payload;
 
-  await pool.query(
-    `INSERT INTO user_onboarding (user_id, liked_actor_ids, watched_tmdb_ids, ratings)
-     VALUES ($1, $2, $3, $4)
-     ON CONFLICT (user_id) DO UPDATE
-       SET liked_actor_ids = EXCLUDED.liked_actor_ids,
-           watched_tmdb_ids = EXCLUDED.watched_tmdb_ids,
-           ratings = EXCLUDED.ratings,
-           completed_at = CURRENT_TIMESTAMP`,
-    [userId, liked_actor_ids, watched_tmdb_ids, JSON.stringify(ratings)]
-  );
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  if (watched_tmdb_ids.length > 0) {
-    const values = watched_tmdb_ids
-      .map((_, i) => `($1, $${i + 2}, TRUE, NOW())`)
-      .join(', ');
-
-    await pool.query(
-      `INSERT INTO user_movie_actions (user_id, tmdb_id, is_watched, updated_at)
-       VALUES ${values}
-       ON CONFLICT (user_id, tmdb_id) DO UPDATE
-         SET is_watched = TRUE, updated_at = NOW()`,
-      [userId, ...watched_tmdb_ids]
+    await client.query(
+      `INSERT INTO user_onboarding (user_id, liked_actor_ids, watched_tmdb_ids, ratings)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (user_id) DO UPDATE
+         SET liked_actor_ids = EXCLUDED.liked_actor_ids,
+             watched_tmdb_ids = EXCLUDED.watched_tmdb_ids,
+             ratings = EXCLUDED.ratings,
+             completed_at = CURRENT_TIMESTAMP`,
+      [userId, liked_actor_ids, watched_tmdb_ids, JSON.stringify(ratings)]
     );
 
-    const mediaTypeRes = await pool.query<{ tmdb_id: number; media_type: string }>(
-      `SELECT tmdb_id, media_type FROM onboarding_movies
-       WHERE tmdb_id = ANY($1::int[])`,
-      [watched_tmdb_ids]
-    );
-    const mediaTypeMap = new Map<number, string>(
-      mediaTypeRes.rows.map(r => [r.tmdb_id, r.media_type])
-    );
+    if (watched_tmdb_ids.length > 0) {
+      const values = watched_tmdb_ids
+        .map((_, i) => `($1, $${i + 2}, TRUE, NOW())`)
+        .join(', ');
 
-    const watchedList = await pool.query(
-      `SELECT id FROM user_lists WHERE user_id = $1 AND list_type = 'watched' LIMIT 1`,
-      [userId]
-    );
-    if (watchedList.rows.length > 0) {
-      const listId = watchedList.rows[0].id;
-      for (const tmdbId of watched_tmdb_ids) {
-        const mediaType = mediaTypeMap.get(tmdbId) ?? 'movie';
-        await pool.query(
-          `INSERT INTO list_items (list_id, tmdb_id, media_type)
-           VALUES ($1, $2, $3)
-           ON CONFLICT DO NOTHING`,
-          [listId, tmdbId, mediaType]
-        );
+      await client.query(
+        `INSERT INTO user_movie_actions (user_id, tmdb_id, is_watched, updated_at)
+         VALUES ${values}
+         ON CONFLICT (user_id, tmdb_id) DO UPDATE
+           SET is_watched = TRUE, updated_at = NOW()`,
+        [userId, ...watched_tmdb_ids]
+      );
+
+      const mediaTypeRes = await client.query<{ tmdb_id: number; media_type: string }>(
+        `SELECT tmdb_id, media_type FROM onboarding_movies
+         WHERE tmdb_id = ANY($1::int[])`,
+        [watched_tmdb_ids]
+      );
+      const mediaTypeMap = new Map<number, string>(
+        mediaTypeRes.rows.map(r => [r.tmdb_id, r.media_type])
+      );
+
+      const watchedList = await client.query(
+        `SELECT id FROM user_lists WHERE user_id = $1 AND list_type = 'watched' LIMIT 1`,
+        [userId]
+      );
+      if (watchedList.rows.length > 0) {
+        const listId = watchedList.rows[0].id;
+        for (const tmdbId of watched_tmdb_ids) {
+          const mediaType = mediaTypeMap.get(tmdbId) ?? 'movie';
+          await client.query(
+            `INSERT INTO list_items (list_id, tmdb_id, media_type)
+             VALUES ($1, $2, $3)
+             ON CONFLICT DO NOTHING`,
+            [listId, tmdbId, mediaType]
+          );
+        }
       }
+
+      await client.query(
+        `UPDATE users
+         SET movies_watched = (
+           SELECT COUNT(*) FROM user_movie_actions
+           WHERE user_id = $1 AND is_watched = TRUE
+         ), updated_at = NOW()
+         WHERE id = $1`,
+        [userId]
+      );
     }
 
-    await pool.query(
-      `UPDATE users
-       SET movies_watched = (
-         SELECT COUNT(*) FROM user_movie_actions
-         WHERE user_id = $1 AND is_watched = TRUE
-       ), updated_at = NOW()
-       WHERE id = $1`,
-      [userId]
-    );
-  }
+    const ratingEntries = Object.entries(ratings);
+    for (const [tmdbIdStr, rating] of ratingEntries) {
+      const tmdbId = Number(tmdbIdStr);
+      await client.query(
+        `INSERT INTO user_detailed_ratings (user_id, tmdb_id, overall_rating, updated_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (user_id, tmdb_id) DO UPDATE
+           SET overall_rating = EXCLUDED.overall_rating, updated_at = NOW()`,
+        [userId, tmdbId, rating]
+      );
+    }
 
-  const ratingEntries = Object.entries(ratings);
-  for (const [tmdbIdStr, rating] of ratingEntries) {
-    const tmdbId = Number(tmdbIdStr);
-    await pool.query(
-      `INSERT INTO user_detailed_ratings (user_id, tmdb_id, overall_rating, updated_at)
-       VALUES ($1, $2, $3, NOW())
-       ON CONFLICT (user_id, tmdb_id) DO UPDATE
-         SET overall_rating = EXCLUDED.overall_rating, updated_at = NOW()`,
-      [userId, tmdbId, rating]
-    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('completeOnboarding failed for user', userId, error);
+    throw error;
+  } finally {
+    client.release();
   }
 };
