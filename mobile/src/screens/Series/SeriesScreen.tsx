@@ -108,7 +108,9 @@ export default function SeriesScreen({ navigation, route }: any) {
         if (!token) return;
         const payload = JSON.parse(atob(token.split('.')[1]));
         setCurrentUserId(payload.userId);
-      } catch {}
+      } catch (err) {
+        console.warn('Failed to decode access token:', err);
+      }
     };
     decodeUserId();
   }, []);
@@ -127,7 +129,9 @@ export default function SeriesScreen({ navigation, route }: any) {
         setRating(EMPTY_RATING);
         setMood(null);
         setVotedActorId(null);
-      } catch {}
+      } catch (err) {
+        console.warn(`Failed to reset ratings for series ${seriesId}:`, err);
+      }
     }
   };
 

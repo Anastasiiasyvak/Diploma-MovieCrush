@@ -29,95 +29,108 @@ export const toggleMovieAction = async (
   };
   const col = colMap[input.action];
 
-  await pool.query(
-    `INSERT INTO user_movie_actions (user_id, tmdb_id)
-     VALUES ($1, $2)
-     ON CONFLICT (user_id, tmdb_id) DO NOTHING`,
-    [userId, input.tmdb_id]
-  );
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  const current = await pool.query(
-    `SELECT ${col} FROM user_movie_actions WHERE user_id = $1 AND tmdb_id = $2`,
-    [userId, input.tmdb_id]
-  );
-  const newValue = !current.rows[0][col];
-
-  await pool.query(
-    `UPDATE user_movie_actions SET ${col} = $1, updated_at = NOW()
-     WHERE user_id = $2 AND tmdb_id = $3`,
-    [newValue, userId, input.tmdb_id]
-  );
-
-  if (input.action === 'favorite' && newValue) {
-    await pool.query(
-      `UPDATE user_movie_actions SET is_watched = TRUE, updated_at = NOW()
-       WHERE user_id = $1 AND tmdb_id = $2`,
+    await client.query(
+      `INSERT INTO user_movie_actions (user_id, tmdb_id)
+       VALUES ($1, $2)
+       ON CONFLICT (user_id, tmdb_id) DO NOTHING`,
       [userId, input.tmdb_id]
     );
-    const watchedList = await pool.query(
-      `SELECT id FROM user_lists WHERE user_id = $1 AND list_type = 'watched'`, [userId]
-    );
-    if (watchedList.rows.length > 0) {
-      await pool.query(
-        `INSERT INTO list_items (list_id, tmdb_id, media_type) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-        [watchedList.rows[0].id, input.tmdb_id, input.media_type]
-      );
-    }
-  }
 
-  const listTypeMap: Record<string, string> = {
-    favorite:  'favorites',
-    watchlist: 'watchlist',
-    watched:   'watched',
-  };
-  const listType = listTypeMap[input.action];
-  if (listType) {
-    const listRes = await pool.query(
-      `SELECT id FROM user_lists WHERE user_id = $1 AND list_type = $2`,
-      [userId, listType]
+    const current = await client.query(
+      `SELECT ${col} FROM user_movie_actions WHERE user_id = $1 AND tmdb_id = $2`,
+      [userId, input.tmdb_id]
     );
-    if (listRes.rows.length > 0) {
-      if (newValue) {
-        await pool.query(
+    const newValue = !current.rows[0][col];
+
+    await client.query(
+      `UPDATE user_movie_actions SET ${col} = $1, updated_at = NOW()
+       WHERE user_id = $2 AND tmdb_id = $3`,
+      [newValue, userId, input.tmdb_id]
+    );
+
+    if (input.action === 'favorite' && newValue) {
+      await client.query(
+        `UPDATE user_movie_actions SET is_watched = TRUE, updated_at = NOW()
+         WHERE user_id = $1 AND tmdb_id = $2`,
+        [userId, input.tmdb_id]
+      );
+      const watchedList = await client.query(
+        `SELECT id FROM user_lists WHERE user_id = $1 AND list_type = 'watched'`, [userId]
+      );
+      if (watchedList.rows.length > 0) {
+        await client.query(
           `INSERT INTO list_items (list_id, tmdb_id, media_type) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-          [listRes.rows[0].id, input.tmdb_id, input.media_type]
-        );
-      } else {
-        await pool.query(
-          `DELETE FROM list_items WHERE list_id = $1 AND tmdb_id = $2`,
-          [listRes.rows[0].id, input.tmdb_id]
+          [watchedList.rows[0].id, input.tmdb_id, input.media_type]
         );
       }
     }
-  }
 
-  if (input.action === 'watched' || (input.action === 'favorite' && newValue)) {
-    await pool.query(
-      `UPDATE users SET movies_watched = (
-        SELECT COUNT(DISTINCT li.tmdb_id)
-        FROM list_items li
-        JOIN user_lists ul ON ul.id = li.list_id
-        WHERE ul.user_id = $1 AND ul.list_type = 'watched' AND li.media_type = 'movie'
-      ), updated_at = NOW() WHERE id = $1`,
-      [userId]
-    );
-    await pool.query(
-      `UPDATE users SET series_watched = (
-        SELECT COUNT(DISTINCT li.tmdb_id)
-        FROM list_items li
-        JOIN user_lists ul ON ul.id = li.list_id
-        WHERE ul.user_id = $1 AND ul.list_type = 'watched' AND li.media_type = 'tv'
-      ), updated_at = NOW() WHERE id = $1`,
-      [userId]
-    );
-  }
+    const listTypeMap: Record<string, string> = {
+      favorite:  'favorites',
+      watchlist: 'watchlist',
+      watched:   'watched',
+    };
+    const listType = listTypeMap[input.action];
+    if (listType) {
+      const listRes = await client.query(
+        `SELECT id FROM user_lists WHERE user_id = $1 AND list_type = $2`,
+        [userId, listType]
+      );
+      if (listRes.rows.length > 0) {
+        if (newValue) {
+          await client.query(
+            `INSERT INTO list_items (list_id, tmdb_id, media_type) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+            [listRes.rows[0].id, input.tmdb_id, input.media_type]
+          );
+        } else {
+          await client.query(
+            `DELETE FROM list_items WHERE list_id = $1 AND tmdb_id = $2`,
+            [listRes.rows[0].id, input.tmdb_id]
+          );
+        }
+      }
+    }
 
-  const updated = await pool.query(
-    `SELECT is_favorite, is_watchlist, is_watched, is_disliked
-     FROM user_movie_actions WHERE user_id = $1 AND tmdb_id = $2`,
-    [userId, input.tmdb_id]
-  );
-  return updated.rows[0];
+    if (input.action === 'watched' || (input.action === 'favorite' && newValue)) {
+      await client.query(
+        `UPDATE users SET movies_watched = (
+          SELECT COUNT(DISTINCT li.tmdb_id)
+          FROM list_items li
+          JOIN user_lists ul ON ul.id = li.list_id
+          WHERE ul.user_id = $1 AND ul.list_type = 'watched' AND li.media_type = 'movie'
+        ), updated_at = NOW() WHERE id = $1`,
+        [userId]
+      );
+      await client.query(
+        `UPDATE users SET series_watched = (
+          SELECT COUNT(DISTINCT li.tmdb_id)
+          FROM list_items li
+          JOIN user_lists ul ON ul.id = li.list_id
+          WHERE ul.user_id = $1 AND ul.list_type = 'watched' AND li.media_type = 'tv'
+        ), updated_at = NOW() WHERE id = $1`,
+        [userId]
+      );
+    }
+
+    const updated = await client.query(
+      `SELECT is_favorite, is_watchlist, is_watched, is_disliked
+       FROM user_movie_actions WHERE user_id = $1 AND tmdb_id = $2`,
+      [userId, input.tmdb_id]
+    );
+
+    await client.query('COMMIT');
+    return updated.rows[0];
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('toggleMovieAction failed for user', userId, 'tmdb', input.tmdb_id, error);
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 
@@ -153,53 +166,65 @@ export const addToCustomList = async (
 export const removeFromCustomList = async (
   userId: number, listId: number, tmdbId: number
 ): Promise<{ list_type: string }> => {
-  const listCheck = await pool.query(
-    `SELECT id, list_type FROM user_lists WHERE id = $1 AND user_id = $2`, [listId, userId]
-  );
-  if (listCheck.rows.length === 0) throw new Error('List not found or not yours');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  const { list_type } = listCheck.rows[0];
+    const listCheck = await client.query(
+      `SELECT id, list_type FROM user_lists WHERE id = $1 AND user_id = $2`, [listId, userId]
+    );
+    if (listCheck.rows.length === 0) throw new Error('List not found or not yours');
 
-  await pool.query(`DELETE FROM list_items WHERE list_id = $1 AND tmdb_id = $2`, [listId, tmdbId]);
+    const { list_type } = listCheck.rows[0];
 
-  if (list_type === 'watched') {
-    await pool.query(
-      `UPDATE user_movie_actions SET is_watched = FALSE, updated_at = NOW()
-       WHERE user_id = $1 AND tmdb_id = $2`,
-      [userId, tmdbId]
-    );
-    await pool.query(
-      `UPDATE users SET movies_watched = (
-        SELECT COUNT(*) FROM user_movie_actions WHERE user_id = $1 AND is_watched = TRUE
-       ), updated_at = NOW() WHERE id = $1`,
-      [userId]
-    );
-    await pool.query(
-      `DELETE FROM user_detailed_ratings WHERE user_id = $1 AND tmdb_id = $2`, [userId, tmdbId]
-    );
-    await pool.query(
-      `DELETE FROM user_movie_moods WHERE user_id = $1 AND tmdb_id = $2`, [userId, tmdbId]
-    );
-    await pool.query(
-      `DELETE FROM user_best_actor_votes WHERE user_id = $1 AND tmdb_id = $2`, [userId, tmdbId]
-    );
+    await client.query(`DELETE FROM list_items WHERE list_id = $1 AND tmdb_id = $2`, [listId, tmdbId]);
 
-  } else if (list_type === 'favorites') {
-    await pool.query(
-      `UPDATE user_movie_actions SET is_favorite = FALSE, updated_at = NOW()
-       WHERE user_id = $1 AND tmdb_id = $2`,
-      [userId, tmdbId]
-    );
+    if (list_type === 'watched') {
+      await client.query(
+        `UPDATE user_movie_actions SET is_watched = FALSE, updated_at = NOW()
+         WHERE user_id = $1 AND tmdb_id = $2`,
+        [userId, tmdbId]
+      );
+      await client.query(
+        `UPDATE users SET movies_watched = (
+          SELECT COUNT(*) FROM user_movie_actions WHERE user_id = $1 AND is_watched = TRUE
+         ), updated_at = NOW() WHERE id = $1`,
+        [userId]
+      );
+      await client.query(
+        `DELETE FROM user_detailed_ratings WHERE user_id = $1 AND tmdb_id = $2`, [userId, tmdbId]
+      );
+      await client.query(
+        `DELETE FROM user_movie_moods WHERE user_id = $1 AND tmdb_id = $2`, [userId, tmdbId]
+      );
+      await client.query(
+        `DELETE FROM user_best_actor_votes WHERE user_id = $1 AND tmdb_id = $2`, [userId, tmdbId]
+      );
 
-  } else if (list_type === 'watchlist') {
-    await pool.query(
-      `UPDATE user_movie_actions SET is_watchlist = FALSE, updated_at = NOW()
-       WHERE user_id = $1 AND tmdb_id = $2`,
-      [userId, tmdbId]
-    );
+    } else if (list_type === 'favorites') {
+      await client.query(
+        `UPDATE user_movie_actions SET is_favorite = FALSE, updated_at = NOW()
+         WHERE user_id = $1 AND tmdb_id = $2`,
+        [userId, tmdbId]
+      );
+
+    } else if (list_type === 'watchlist') {
+      await client.query(
+        `UPDATE user_movie_actions SET is_watchlist = FALSE, updated_at = NOW()
+         WHERE user_id = $1 AND tmdb_id = $2`,
+        [userId, tmdbId]
+      );
+    }
+
+    await client.query('COMMIT');
+    return { list_type };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('removeFromCustomList failed for user', userId, 'list', listId, 'tmdb', tmdbId, error);
+    throw error;
+  } finally {
+    client.release();
   }
-
-  return { list_type };
 };
 
 export const getUserCustomLists = async (userId: number) => {
@@ -228,51 +253,64 @@ export const getRating = async (
 export const upsertRating = async (
   userId: number, input: DetailedRatingInput
 ): Promise<DetailedRatingResponse> => {
-  if (input.overall_rating != null) {
-    await pool.query(
-      `INSERT INTO user_movie_actions (user_id, tmdb_id, is_watched)
-       VALUES ($1, $2, TRUE)
-       ON CONFLICT (user_id, tmdb_id) DO UPDATE SET is_watched = TRUE, updated_at = NOW()`,
-      [userId, input.tmdb_id]
-    );
-    const watchedList = await pool.query(
-      `SELECT id FROM user_lists WHERE user_id = $1 AND list_type = 'watched'`, [userId]
-    );
-    if (watchedList.rows.length > 0) {
-      await pool.query(
-        `INSERT INTO list_items (list_id, tmdb_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-        [watchedList.rows[0].id, input.tmdb_id]
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (input.overall_rating != null) {
+      await client.query(
+        `INSERT INTO user_movie_actions (user_id, tmdb_id, is_watched)
+         VALUES ($1, $2, TRUE)
+         ON CONFLICT (user_id, tmdb_id) DO UPDATE SET is_watched = TRUE, updated_at = NOW()`,
+        [userId, input.tmdb_id]
+      );
+      const watchedList = await client.query(
+        `SELECT id FROM user_lists WHERE user_id = $1 AND list_type = 'watched'`, [userId]
+      );
+      if (watchedList.rows.length > 0) {
+        await client.query(
+          `INSERT INTO list_items (list_id, tmdb_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [watchedList.rows[0].id, input.tmdb_id]
+        );
+      }
+      await client.query(
+        `UPDATE users SET movies_watched = (
+          SELECT COUNT(*) FROM user_movie_actions WHERE user_id = $1 AND is_watched = TRUE
+         ), updated_at = NOW() WHERE id = $1`,
+        [userId]
       );
     }
-    await pool.query(
-      `UPDATE users SET movies_watched = (
-        SELECT COUNT(*) FROM user_movie_actions WHERE user_id = $1 AND is_watched = TRUE
-       ), updated_at = NOW() WHERE id = $1`,
-      [userId]
-    );
-  }
 
-  const result = await pool.query(
-    `INSERT INTO user_detailed_ratings
-       (user_id, tmdb_id, overall_rating, director_score, effects_score, script_score, music_score, acting_score)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     ON CONFLICT (user_id, tmdb_id) DO UPDATE SET
-       overall_rating = COALESCE(EXCLUDED.overall_rating, user_detailed_ratings.overall_rating),
-       director_score = COALESCE(EXCLUDED.director_score, user_detailed_ratings.director_score),
-       effects_score  = COALESCE(EXCLUDED.effects_score,  user_detailed_ratings.effects_score),
-       script_score   = COALESCE(EXCLUDED.script_score,   user_detailed_ratings.script_score),
-       music_score    = COALESCE(EXCLUDED.music_score,    user_detailed_ratings.music_score),
-       acting_score   = COALESCE(EXCLUDED.acting_score,   user_detailed_ratings.acting_score),
-       updated_at = NOW()
-     RETURNING overall_rating, director_score, effects_score, script_score, music_score, acting_score`,
-    [
-      userId, input.tmdb_id,
-      input.overall_rating ?? null, input.director_score ?? null,
-      input.effects_score  ?? null, input.script_score   ?? null,
-      input.music_score    ?? null, input.acting_score   ?? null,
-    ]
-  );
-  return result.rows[0];
+    const result = await client.query(
+      `INSERT INTO user_detailed_ratings
+         (user_id, tmdb_id, overall_rating, director_score, effects_score, script_score, music_score, acting_score)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (user_id, tmdb_id) DO UPDATE SET
+         overall_rating = COALESCE(EXCLUDED.overall_rating, user_detailed_ratings.overall_rating),
+         director_score = COALESCE(EXCLUDED.director_score, user_detailed_ratings.director_score),
+         effects_score = COALESCE(EXCLUDED.effects_score, user_detailed_ratings.effects_score),
+         script_score = COALESCE(EXCLUDED.script_score, user_detailed_ratings.script_score),
+         music_score = COALESCE(EXCLUDED.music_score, user_detailed_ratings.music_score),
+         acting_score = COALESCE(EXCLUDED.acting_score, user_detailed_ratings.acting_score),
+         updated_at = NOW()
+       RETURNING overall_rating, director_score, effects_score, script_score, music_score, acting_score`,
+      [
+        userId, input.tmdb_id,
+        input.overall_rating ?? null, input.director_score ?? null,
+        input.effects_score ?? null, input.script_score ?? null,
+        input.music_score ?? null, input.acting_score ?? null,
+      ]
+    );
+
+    await client.query('COMMIT');
+    return result.rows[0];
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('upsertRating failed for user', userId, 'tmdb', input.tmdb_id, error);
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 

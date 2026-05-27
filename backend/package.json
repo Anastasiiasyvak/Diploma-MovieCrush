@@ -17,6 +17,10 @@
     "testEnvironment": "node",
     "testMatch": [
       "**/__tests__/**/*.test.ts"
+    ],
+    "moduleFileExtensions": [
+      "ts",
+      "js"
     ]
   },
   "dependencies": {
@@ -42,9 +46,9 @@
     "@types/node": "^25.4.0",
     "@types/pg": "^8.18.0",
     "@types/uuid": "^10.0.0",
-    "jest": "^30.3.0",
+    "jest": "^30.4.2",
     "nodemon": "^3.1.14",
-    "ts-jest": "^29.4.9",
+    "ts-jest": "^29.4.10",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   }

@@ -103,7 +103,9 @@ export default function MovieScreen({ navigation, route }: any) {
         if (!token) return;
         const payload = JSON.parse(atob(token.split('.')[1]));
         setCurrentUserId(payload.userId);
-      } catch {}
+      } catch (err) {
+        console.warn('Failed to decode access token:', err);
+      }
     };
     decodeUserId();
   }, []);

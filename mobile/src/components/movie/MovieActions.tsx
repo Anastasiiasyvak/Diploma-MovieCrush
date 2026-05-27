@@ -95,7 +95,9 @@ export const MovieActionsBar: React.FC<Props> = ({
           if (items.some(i => i.tmdb_id === tmdbId)) {
             added.add(l.id);
           }
-        } catch {}
+        } catch (err) {
+          console.warn(`Failed to check list ${l.id} for movie ${tmdbId}:`, err);
+        }
       })
     );
     setAddedToLists(added);

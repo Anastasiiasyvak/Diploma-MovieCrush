@@ -29,6 +29,20 @@ const shuffle = <T>(arr: T[]): T[] => {
   return a;
 };
 
+const pickPages = (seed: number, totalPages: number): number[] => {
+  if (totalPages <= 0) return [1, 2, 3];
+  const clipped = Math.min(totalPages, 500);
+  if (clipped === 1) return [1, 1, 1];
+
+  const pages: number[] = [];
+  for (let i = 0; i < 3; i++) {
+    const base = Math.floor((i / 3) * clipped) + 1;
+    const shifted = ((base - 1 + seed * 7) % clipped) + 1;
+    pages.push(shifted);
+  }
+  return pages;
+};
+
 export const fetchRecommendations = async (
   filters: DiscoverFilters,
   seed = 0,
@@ -41,7 +55,7 @@ export const fetchRecommendations = async (
     const p: Record<string, string> = {
       page: String(page),
       sort_by: filters.sortBy ?? 'popularity.desc',
-      'vote_count.gte': '50',
+
     };
 
     if (filters.minRating) p['vote_average.gte'] = String(filters.minRating);
@@ -98,8 +112,20 @@ export const fetchRecommendations = async (
     return p;
   };
 
-  const pages    = [1, 2, 3].map(p => p + seed * 3);
   const endpoint = `/discover/${baseType}`;
+
+  let totalPages = 0;
+  try {
+    const probe = await fetchTMDB<TMDBResponse<Movie | TVSeries>>(
+      endpoint,
+      buildParams(1, mt === 'dorama' && !filters.originCountry ? 'ko' : undefined)
+    );
+    totalPages = probe.total_pages ?? 0;
+  } catch {
+    totalPages = 3;
+  }
+
+  const pages = pickPages(seed, totalPages);
 
   const fetchJobs: Promise<TMDBResponse<Movie | TVSeries>>[] =
     mt === 'dorama' && !filters.originCountry

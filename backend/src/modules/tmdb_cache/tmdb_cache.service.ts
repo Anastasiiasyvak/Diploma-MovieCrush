@@ -51,6 +51,9 @@ interface TmdbSeriesDetails {
   created_by?: TmdbCreator[];
 }
 
+const isNotFound = (err: unknown): boolean =>
+  err instanceof Error && err.message.includes('404');
+
 export const cacheMediaIfNeeded = async (
   tmdbId: number,
   mediaType: 'movie' | 'tv'
@@ -63,10 +66,21 @@ export const cacheMediaIfNeeded = async (
     );
     if (existing.rows.length > 0) return;
 
-    if (mediaType === 'movie') {
-      await cacheMovie(tmdbId);
-    } else {
-      await cacheSeries(tmdbId);
+    const primary = mediaType;
+    const secondary: 'movie' | 'tv' = mediaType === 'movie' ? 'tv' : 'movie';
+
+    const cacheFor = (type: 'movie' | 'tv') =>
+      type === 'movie' ? cacheMovie(tmdbId) : cacheSeries(tmdbId);
+
+    try {
+      await cacheFor(primary);
+    } catch (err) {
+      if (isNotFound(err)) {
+        await cacheFor(secondary);
+      } else {
+        throw err;
+      }
+
     }
   } catch (err) {
     console.error(`cacheMediaIfNeeded(${tmdbId}, ${mediaType}) failed:`, err);
