@@ -1,8 +1,21 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 const FROM_EMAIL = 'MovieCrush <onboarding@resend.dev>';
+
+let resendClient: Resend | null = null;
+
+const getResend = (): Resend | null => {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn('RESEND_API_KEY is not set — email sending is disabled.');
+    return null;
+  }
+  if (!resendClient) {
+    resendClient = new Resend(apiKey);
+  }
+  return resendClient;
+};
 
 // Verification email
 
@@ -12,6 +25,9 @@ export const sendVerificationEmail = async (
   token: string
 ): Promise<void> => {
   const verifyUrl = `${APP_URL}/api/auth/verify/${token}`;
+
+  const resend = getResend();
+  if (!resend) return;
 
   await resend.emails.send({
     from: FROM_EMAIL,
@@ -71,6 +87,9 @@ export const sendResetPasswordEmail = async (
   token: string
 ): Promise<void> => {
   const resetUrl = `${APP_URL}/api/auth/reset-password/${token}`;
+
+  const resend = getResend();
+  if (!resend) return;
 
   await resend.emails.send({
     from: FROM_EMAIL,
