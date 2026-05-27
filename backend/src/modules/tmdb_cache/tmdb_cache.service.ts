@@ -80,6 +80,7 @@ export const cacheMediaIfNeeded = async (
       } else {
         throw err;
       }
+
     }
   } catch (err) {
     console.error(`cacheMediaIfNeeded(${tmdbId}, ${mediaType}) failed:`, err);

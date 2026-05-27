@@ -39,6 +39,7 @@ export const toggleEpisode = async (req: AuthRequest, res: Response) => {
       console.error('cacheMediaIfNeeded failed for series', series_tmdb_id, err);
     });
 
+
     res.json(result);
   } catch (err) {
     console.error('toggleEpisode error:', err);

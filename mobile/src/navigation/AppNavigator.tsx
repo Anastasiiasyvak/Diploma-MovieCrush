@@ -18,6 +18,7 @@ import SeriesScreen from '../screens/Series/SeriesScreen';
 import EpisodeScreen from '../screens/Episode/EpisodeScreen';
 import SoulmateScreen from '../screens/Soulmate/SoulmateScreen';
 import OnboardingScreen from '../screens/Onboarding/OnboardingScreen';
+import WrappedScreen from '../screens/Wrapped/WrappedScreen';
 
 const Stack = createStackNavigator();
 
@@ -51,6 +52,7 @@ export default function AppNavigator() {
 
         <Stack.Screen name="Soulmate" component={SoulmateScreen} />
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+        <Stack.Screen name="Wrapped" component={WrappedScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
