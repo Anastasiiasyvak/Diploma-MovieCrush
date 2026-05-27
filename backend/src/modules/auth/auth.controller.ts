@@ -7,143 +7,37 @@ import {
   checkEmailVerified,
   requestPasswordReset,
   resetPassword,
+  isEmailVerificationEnabled,
 } from './auth.service';
 import { getUserById } from '../shared/user.queries';
 import { RegisterInput, LoginInput } from './auth.types';
 import { AuthRequest } from '../../middleware/auth.middleware';
+import {
+  verifySuccessPage,
+  verifyErrorPage,
+  resetSuccessPage,
+  resetPasswordForm,
+} from './auth.templates';
+import {
+  validatePassword,
+  validateEmail,
+  validateUsername,
+} from './auth.validators';
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const USERNAME_REGEX = /^[a-zA-Z0-9._]+$/;
-
-export const validatePassword = (password: string): string | null => {
-  if (password.length < 8) return 'Password must be at least 8 characters';
-  if (!/[A-Z]/.test(password)) return 'Password must contain at least one uppercase letter';
-  if (!/[a-z]/.test(password)) return 'Password must contain at least one lowercase letter';
-  if (!/[0-9]/.test(password)) return 'Password must contain at least one number';
-  if (password.length > 72) return 'Password must be less than 72 characters';
-  return null;
-};
-
-const validateEmail = (email: string): string | null => {
-  if (!email?.trim()) return 'Email is required';
-  if (!EMAIL_REGEX.test(email)) return 'Please enter a valid email address';
-  if (email.length > 255) return 'Email is too long';
-  return null;
-};
-
-const validateUsername = (username: string): string | null => {
-  if (!username?.trim()) return 'Username is required';
-  if (username.length < 3) return 'Username must be at least 3 characters';
-  if (username.length > 30) return 'Username must be less than 30 characters';
-  if (!USERNAME_REGEX.test(username)) return 'Username can only contain letters, numbers, dots and underscores';
-  if (username.startsWith('.') || username.startsWith('_')) return 'Username cannot start with a dot or underscore';
-  return null;
-};
 
 const generateTokens = (userId: number, uuid: string) => {
   const accessToken = jwt.sign(
-    { userId, uuid },
+    { userId, uuid, type: 'access' },
     process.env.JWT_SECRET as string,
     { expiresIn: '15m' }
   );
   const refreshToken = jwt.sign(
-    { userId, uuid },
+    { userId, uuid, type: 'refresh' },
     process.env.JWT_REFRESH_SECRET as string,
     { expiresIn: '30d' }
   );
   return { accessToken, refreshToken };
 };
-
-const verifySuccessPage = `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MovieCrush — Email Verified</title>
-  </head>
-  <body style="margin:0;padding:0;background:#000;font-family:Arial,sans-serif;">
-    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 20px;">
-      <div style="background:#111;border-radius:16px;border:1px solid #222;padding:48px 40px;max-width:480px;width:100%;text-align:center;">
-        <h1 style="margin:0 0 8px;font-size:28px;font-weight:700;color:#ffafcc;">MovieCrush</h1>
-        <div style="font-size:48px;margin:24px 0;">🎬</div>
-        <h2 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#00cc66;">Email verified!</h2>
-        <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.6);line-height:1.6;">Your account is now active.<br/>You can close this tab and return to the app.</p>
-      </div>
-    </div>
-  </body>
-</html>`;
-
-const verifyErrorPage = `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MovieCrush — Verification Failed</title>
-  </head>
-  <body style="margin:0;padding:0;background:#000;font-family:Arial,sans-serif;">
-    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 20px;">
-      <div style="background:#111;border-radius:16px;border:1px solid #222;padding:48px 40px;max-width:480px;width:100%;text-align:center;">
-        <h1 style="margin:0 0 8px;font-size:28px;font-weight:700;color:#ffafcc;">MovieCrush</h1>
-        <div style="font-size:48px;margin:24px 0;">❌</div>
-        <h2 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#ff4d4d;">Invalid or expired link</h2>
-        <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.6);line-height:1.6;">This link is invalid or has already been used.<br/>Please try again.</p>
-      </div>
-    </div>
-  </body>
-</html>`;
-
-const resetPasswordForm = (token: string, errorMessage?: string) => `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MovieCrush — Reset Password</title>
-  </head>
-  <body style="margin:0;padding:0;background:#000;font-family:Arial,sans-serif;">
-    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 20px;">
-      <div style="background:#111;border-radius:16px;border:1px solid #222;padding:48px 40px;max-width:480px;width:100%;">
-        <h1 style="margin:0 0 8px;font-size:28px;font-weight:700;color:#ffafcc;text-align:center;">MovieCrush</h1>
-        <h2 style="margin:24px 0 8px;font-size:20px;font-weight:700;color:#fff;text-align:center;">Create new password</h2>
-        <p style="margin:0 0 ${errorMessage ? '16px' : '28px'};font-size:14px;color:rgba(255,255,255,0.5);text-align:center;">
-          Min 8 characters, one uppercase, one number
-        </p>
-        ${errorMessage ? `
-        <div style="background:rgba(255,77,77,0.12);border:1px solid rgba(255,77,77,0.4);border-radius:12px;padding:12px 16px;margin-bottom:20px;text-align:center;">
-          <p style="margin:0;color:#ff4d4d;font-size:14px;">⚠ ${errorMessage}</p>
-        </div>` : ''}
-        <form method="POST" action="/api/auth/reset-password/${token}">
-          <input type="password" name="password" placeholder="New password" required minlength="8"
-            style="width:100%;box-sizing:border-box;background:transparent;border:2px solid #ffd700;border-radius:12px;padding:14px;color:#fff;font-size:16px;margin-bottom:12px;outline:none;"/>
-          <input type="password" name="confirmPassword" placeholder="Confirm new password" required minlength="8"
-            style="width:100%;box-sizing:border-box;background:transparent;border:2px solid #ffd700;border-radius:12px;padding:14px;color:#fff;font-size:16px;margin-bottom:24px;outline:none;"/>
-          <button type="submit"
-            style="width:100%;background:linear-gradient(135deg,#ffed4e,#ffd700);color:#000;font-size:16px;font-weight:700;border:none;padding:16px;border-radius:50px;cursor:pointer;letter-spacing:0.5px;">
-            Reset Password
-          </button>
-        </form>
-      </div>
-    </div>
-  </body>
-</html>`;
-
-const resetSuccessPage = `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MovieCrush — Password Updated</title>
-  </head>
-  <body style="margin:0;padding:0;background:#000;font-family:Arial,sans-serif;">
-    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 20px;">
-      <div style="background:#111;border-radius:16px;border:1px solid #222;padding:48px 40px;max-width:480px;width:100%;text-align:center;">
-        <h1 style="margin:0 0 8px;font-size:28px;font-weight:700;color:#ffafcc;">MovieCrush</h1>
-        <div style="font-size:48px;margin:24px 0;">✅</div>
-        <h2 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#00cc66;">Password updated!</h2>
-        <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.6);line-height:1.6;">Your password has been changed.<br/>You can close this tab and log in to the app.</p>
-      </div>
-    </div>
-  </body>
-</html>`;
 
 
 export const register = async (req: Request, res: Response) => {
@@ -166,9 +60,7 @@ export const register = async (req: Request, res: Response) => {
 
     const user = await registerUser(input);
 
-    const emailVerificationEnabled = process.env.EMAIL_VERIFICATION_ENABLED === 'true';
-
-    if (emailVerificationEnabled) {
+    if (isEmailVerificationEnabled()) {
       res.status(201).json({
         message: 'Registration successful! Please check your email to verify your account.',
       });
@@ -245,7 +137,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
   }
 };
 
-export const resetPasswordForm_handler = async (req: Request, res: Response) => {
+export const resetPasswordPage = async (req: Request, res: Response) => {
   try {
     const token = req.params.token as string;
     if (!token) { res.status(400).send(verifyErrorPage); return; }
@@ -324,6 +216,12 @@ export const refreshToken = async (req: Request, res: Response) => {
     if (!refreshToken) { res.status(400).json({ error: 'Refresh token required' }); return; }
 
     const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET as string) as any;
+
+    if (decoded.type !== 'refresh') {
+      res.status(401).json({ error: 'Invalid token type' });
+      return;
+    }
+
     const user = await getUserById(decoded.userId);
     if (!user) { res.status(401).json({ error: 'User not found' }); return; }
 

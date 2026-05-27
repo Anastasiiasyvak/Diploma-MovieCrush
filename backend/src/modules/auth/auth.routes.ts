@@ -7,7 +7,7 @@ import {
   verifyEmailHandler,
   checkVerified,
   forgotPassword,
-  resetPasswordForm_handler,
+  resetPasswordPage,
   resetPasswordHandler,
 } from './auth.controller';
 import { authMiddleware } from '../../middleware/auth.middleware';
@@ -19,9 +19,9 @@ router.post('/login',                     login);
 router.post('/refresh',                   refreshToken);
 router.get('/me',                         authMiddleware, getMe);
 router.get('/verify/:token',              verifyEmailHandler);
-router.post('/check-verified',             checkVerified);
+router.post('/check-verified',            checkVerified);
 router.post('/forgot-password',           forgotPassword);
-router.get('/reset-password/:token',      resetPasswordForm_handler);  
-router.post('/reset-password/:token',     resetPasswordHandler);     
+router.get('/reset-password/:token',      resetPasswordPage);
+router.post('/reset-password/:token',     resetPasswordHandler);
 
 export default router;

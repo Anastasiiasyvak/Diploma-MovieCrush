@@ -6,7 +6,7 @@ import { RegisterInput, LoginInput } from './auth.types';
 import { User } from '../shared/user.types';
 import { createDefaultLists } from '../lists/lists.service';
 
-const isEmailVerificationEnabled = (): boolean =>
+export const isEmailVerificationEnabled = (): boolean =>
   process.env.EMAIL_VERIFICATION_ENABLED === 'true';
 
 export const registerUser = async (input: RegisterInput): Promise<User> => {

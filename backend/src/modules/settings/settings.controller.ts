@@ -9,7 +9,7 @@ import {
 } from './settings.service';
 import { updateUserProfile } from '../profile/profile.service';
 import { getUserById } from '../shared/user.queries';
-import { validatePassword } from '../auth/auth.controller';
+import { validatePassword } from '../auth/auth.validators';
 
 const USERNAME_REGEX = /^[a-zA-Z0-9._]+$/;
 
