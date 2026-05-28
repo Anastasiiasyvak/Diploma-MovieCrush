@@ -239,4 +239,11 @@ export const styles = StyleSheet.create({
     marginTop: 24,
     lineHeight: 16,
   },
+  cooldownNote: {
+    fontFamily: FONTS.medium,
+    fontSize: 13,
+    color: COLORS.cardTextLight,
+    textAlign: 'center',
+    paddingVertical: 14,
+  },
 });

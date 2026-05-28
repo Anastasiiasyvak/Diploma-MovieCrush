@@ -1,18 +1,16 @@
 import pool from '../../config/database';
 import { SimilarityBreakdown } from './soulmate.types';
-
-const WEIGHTS = {
-  rating: 0.40,
-  genre: 0.20,
-  actor: 0.15,
-  mood: 0.10,
-  director: 0.10,
-  disliked: 0.05,
-} as const;
-
-const MIN_RATING_OVERLAP = 3;
-const MIN_USER_MOVIES = 5;
-const MIN_SCORE_THRESHOLD = 0.30;
+import {
+  MIN_RATING_OVERLAP,
+  MIN_USER_MOVIES,
+  MIN_SCORE_THRESHOLD,
+  cosineSimilarity,
+  cosineSimilarityFromCounts,
+  jaccard,
+  weightedSum,
+  isRecomputeThrottled,
+  buildRatingVectors,
+} from './soulmate.math';
 
 const computeRatingCosineSimilarity = async (
   userA: number, userB: number
@@ -35,30 +33,9 @@ const computeRatingCosineSimilarity = async (
     return { similarity: 0, sharedMovies: [] };
   }
 
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-  const sharedMovies: number[] = [];
-
-  for (const row of result.rows) {
-    const rA = Number(row.rating_a);
-    const rB = Number(row.rating_b);
-    dotProduct += rA * rB;
-    normA += rA * rA;
-    normB += rB * rB;
-    sharedMovies.push(Number(row.tmdb_id));
-  }
-
-  const denom = Math.sqrt(normA) * Math.sqrt(normB);
-  const similarity = denom === 0 ? 0 : dotProduct / denom;
+  const { vectorA, vectorB, sharedMovies } = buildRatingVectors(result.rows);
+  const similarity = cosineSimilarity(vectorA, vectorB);
   return { similarity, sharedMovies };
-};
-
-const jaccard = <T>(setA: Set<T>, setB: Set<T>): number => {
-  if (setA.size === 0 && setB.size === 0) return 0;
-  const intersection = [...setA].filter(x => setB.has(x)).length;
-  const union = setA.size + setB.size - intersection;
-  return union === 0 ? 0 : intersection / union;
 };
 
 const computeWatchedOverlap = async (
@@ -127,19 +104,7 @@ const computeMoodSimilarity = async (
     else                                moodsB[row.mood] = Number(row.cnt);
   }
 
-  const allMoods = new Set([...Object.keys(moodsA), ...Object.keys(moodsB)]);
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-  for (const m of allMoods) {
-    const a = moodsA[m] ?? 0;
-    const b = moodsB[m] ?? 0;
-    dotProduct += a * b;
-    normA += a * a;
-    normB += b * b;
-  }
-  const denom = Math.sqrt(normA) * Math.sqrt(normB);
-  return denom === 0 ? 0 : dotProduct / denom;
+  return cosineSimilarityFromCounts(moodsA, moodsB);
 };
 
 const computeDirectorOverlap = async (
@@ -209,13 +174,14 @@ export const computeHybridSimilarity = async (
     computeDislikedOverlap(userA, userB),
   ]);
 
-  const total =
-    WEIGHTS.rating * rating.similarity +
-    WEIGHTS.genre * genre +
-    WEIGHTS.actor * actor +
-    WEIGHTS.mood * mood +
-    WEIGHTS.director * director +
-    WEIGHTS.disliked * disliked.similarity;
+  const total = weightedSum({
+    rating: rating.similarity,
+    genre,
+    actor,
+    mood,
+    director,
+    disliked: disliked.similarity,
+  });
 
   return {
     total,
@@ -242,6 +208,20 @@ const getEligibleCandidates = async (userId: number): Promise<number[]> => {
   return result.rows.map(r => Number(r.id));
 };
 
+export const getLastComputedAt = async (
+  userId: number,
+  year: number
+): Promise<Date | null> => {
+  const result = await pool.query(
+    `SELECT computed_at FROM user_soulmate_matches
+     WHERE user_id = $1 AND wrapped_year = $2`,
+    [userId, year]
+  );
+  if (result.rows.length === 0) return null;
+  return new Date(result.rows[0].computed_at);
+};
+
+
 export const computeSoulmateForUser = async (
   userId: number,
   wrappedYear: number = new Date().getFullYear()
@@ -252,6 +232,11 @@ export const computeSoulmateForUser = async (
   );
   if (meCheck.rows.length === 0) throw new Error('User not found');
   if (!meCheck.rows[0].soulmate_consent) throw new Error('User did not consent to soulmate matching');
+
+  const lastComputed = await getLastComputedAt(userId, wrappedYear);
+  if (isRecomputeThrottled(lastComputed)) {
+    throw new Error('Soulmate recompute throttled');
+  }
 
   const candidates = await getEligibleCandidates(userId);
   if (candidates.length === 0) return null;

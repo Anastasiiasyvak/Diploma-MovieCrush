@@ -1,13 +1,24 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, Image, ScrollView, TouchableOpacity,
-  ActivityIndicator, StatusBar, Alert,
+  ActivityIndicator, StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
 import { Logo } from '../../components/ui/Logo';
+import { CustomAlert } from '../../components/ui/CustomAlert';
 import { soulmateService, SoulmateMatch } from '../../services/soulmateService';
 import { styles } from './SoulmateScreen.styles';
+
+
+const RECOMPUTE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+
+const isRecomputeCoolingDown = (computedAt?: string | null): boolean => {
+  if (!computedAt) return false;
+  const elapsed = Date.now() - new Date(computedAt).getTime();
+  return elapsed < RECOMPUTE_COOLDOWN_MS;
+};
 
 const Avatar: React.FC<{ imageUrl?: string | null }> = ({ imageUrl }) => (
   <View style={styles.avatarWrap}>
@@ -32,10 +43,21 @@ const BreakdownBar: React.FC<{ label: string; value: number }> = ({ label, value
   </View>
 );
 
+interface AlertState {
+  visible: boolean;
+  title: string;
+  message: string;
+}
+
 export default function SoulmateScreen({ navigation }: any) {
   const [match, setMatch] = useState<SoulmateMatch | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isComputing, setIsComputing] = useState(false);
+  const [alert, setAlert] = useState<AlertState>({ visible: false, title: '', message: '' });
+
+  const openAlert = (title: string, message: string) =>
+    setAlert({ visible: true, title, message });
+  const closeAlert = () => setAlert(prev => ({ ...prev, visible: false }));
 
   const loadMatch = useCallback(async () => {
     setIsLoading(true);
@@ -58,14 +80,30 @@ export default function SoulmateScreen({ navigation }: any) {
       if (newMatch) {
         setMatch(newMatch);
       } else {
-        Alert.alert(
+        openAlert(
           'No match yet',
           'No suitable soulmate found. Try again when more users join MovieCrush!'
         );
       }
     } catch (err: any) {
-      const msg = err.response?.data?.error ?? 'Could not compute soulmate';
-      Alert.alert('Oops', msg);
+      const status = err.response?.status;
+      const data = err.response?.data;
+
+      if (status === 429) {
+        if (data?.match) setMatch(data.match);
+        openAlert(
+          'Already updated today',
+          data?.error ?? "You've already updated your soulmate today. Come back tomorrow!"
+        );
+      } else if (status === 403) {
+        openAlert(
+          'Enable soulmate matching',
+          data?.error ?? 'You need to enable soulmate matching in Settings first.'
+        );
+      } else {
+        const msg = data?.error ?? 'Could not compute soulmate';
+        openAlert('Oops', msg);
+      }
     } finally {
       setIsComputing(false);
     }
@@ -81,6 +119,8 @@ export default function SoulmateScreen({ navigation }: any) {
       </View>
     );
   }
+
+  const recomputeOnCooldown = match ? isRecomputeCoolingDown(match.computed_at) : false;
 
   return (
     <View style={styles.container}>
@@ -179,24 +219,39 @@ export default function SoulmateScreen({ navigation }: any) {
               </Text>
 
               <View style={styles.actionsWrap}>
-                <TouchableOpacity
-                  style={styles.secondaryBtn}
-                  onPress={handleRecompute}
-                  disabled={isComputing}
-                  activeOpacity={0.85}
-                >
-                  {isComputing ? (
-                    <ActivityIndicator color={COLORS.white} />
-                  ) : (
-                    <Text style={styles.secondaryBtnText}>Recompute</Text>
-                  )}
-                </TouchableOpacity>
+                {recomputeOnCooldown ? (
+                  <Text style={styles.cooldownNote}>
+                    You've already updated today, in the future this function will be available only once a year. But for testing purposes you can click it again tomorrow
+                  </Text>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.secondaryBtn}
+                    onPress={handleRecompute}
+                    disabled={isComputing}
+                    activeOpacity={0.85}
+                  >
+                    {isComputing ? (
+                      <ActivityIndicator color={COLORS.white} />
+                    ) : (
+                      <Text style={styles.secondaryBtnText}>Recompute</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
               </View>
             </>
           )}
 
         </View>
       </ScrollView>
+
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        confirmText="OK"
+        hideCancel
+        onConfirm={closeAlert}
+      />
     </View>
   );
 }

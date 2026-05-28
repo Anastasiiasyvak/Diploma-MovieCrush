@@ -73,6 +73,17 @@ export const recomputeMyMatch = async (req: AuthRequest, res: Response) => {
       });
       return;
     }
+
+    if (err.message === 'Soulmate recompute throttled') {
+      const year = new Date().getFullYear();
+      const row = await getMyMatch(req.userId!, year);
+      res.status(429).json({
+        error: "You've already updated your soulmate today. Come back tomorrow!",
+        match: row ? formatResponse(row) : null,
+      });
+      return;
+    }
+
     console.error('recomputeMyMatch error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
