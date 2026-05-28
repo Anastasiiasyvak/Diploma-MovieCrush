@@ -52,6 +52,32 @@ export const toggleMovieAction = async (
       [newValue, userId, input.tmdb_id]
     );
 
+
+    if (newValue && input.action === 'favorite') {
+      await client.query(
+        `UPDATE user_movie_actions SET is_disliked = FALSE, updated_at = NOW()
+         WHERE user_id = $1 AND tmdb_id = $2`,
+        [userId, input.tmdb_id]
+      );
+    }
+    if (newValue && input.action === 'dislike') {
+      await client.query(
+        `UPDATE user_movie_actions SET is_favorite = FALSE, updated_at = NOW()
+         WHERE user_id = $1 AND tmdb_id = $2`,
+        [userId, input.tmdb_id]
+      );
+      const favList = await client.query(
+        `SELECT id FROM user_lists WHERE user_id = $1 AND list_type = 'favorites'`,
+        [userId]
+      );
+      if (favList.rows.length > 0) {
+        await client.query(
+          `DELETE FROM list_items WHERE list_id = $1 AND tmdb_id = $2`,
+          [favList.rows[0].id, input.tmdb_id]
+        );
+      }
+    }
+
     if (input.action === 'favorite' && newValue) {
       await client.query(
         `UPDATE user_movie_actions SET is_watched = TRUE, updated_at = NOW()

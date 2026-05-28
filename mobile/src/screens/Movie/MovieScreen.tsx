@@ -71,7 +71,7 @@ export default function MovieScreen({ navigation, route }: any) {
         tmdbMovieService.getMovieCredits(movieId),
         tmdbMovieService.getMovieImages(movieId),
         tmdbMovieService.getMovieVideos(movieId),
-        tmdbMovieService.getSimilarMovies(movieId),
+        tmdbMovieService.getRecommendations(movieId),
         movieService.getActions(movieId),
         movieService.getMyLists(),
         movieService.getRating(movieId),
@@ -82,7 +82,12 @@ export default function MovieScreen({ navigation, route }: any) {
       setCredits(cred);
       setImages(imgs);
       setVideos(vids);
-      setSimilar(sim.results);
+      if (sim.results && sim.results.length > 0) {
+        setSimilar(sim.results);
+      } else {
+        const fallback = await tmdbMovieService.getSimilarMovies(movieId);
+        setSimilar(fallback.results);
+      }
       setActions(act);
       setMyLists(lists);
       setRating(rat);

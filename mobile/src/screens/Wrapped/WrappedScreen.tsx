@@ -284,25 +284,31 @@ export default function WrappedScreen({ navigation }: any) {
           )}
 
           {/* Recompute */}
-          <View style={styles.footerWrap}>
-            <TouchableOpacity
-              style={styles.recomputeBtn}
-              onPress={handleRecompute}
-              disabled={isComputing || !canRecompute}
-              activeOpacity={0.85}
-            >
-              {isComputing
-                ? <ActivityIndicator color={COLORS.white} />
-                : <Text style={styles.recomputeText}>Recompute</Text>}
-            </TouchableOpacity>
-          </View>
+          {canRecompute ? (
+            <>
+              <View style={styles.footerWrap}>
+                <TouchableOpacity
+                  style={styles.recomputeBtn}
+                  onPress={handleRecompute}
+                  disabled={isComputing}
+                  activeOpacity={0.85}
+                >
+                  {isComputing
+                    ? <ActivityIndicator color={COLORS.white} />
+                    : <Text style={styles.recomputeText}>Recompute</Text>}
+                </TouchableOpacity>
+              </View>
 
-          <Text style={styles.recomputeHint}>
-            {canRecompute
-              ? 'MovieCrush Wrapped will be generated once a year. But now for testing, you can recompute once per day.'
-              : 'MovieCrush Wrapped will be generated once a year, but for testing, you can recompute once per day. But you\'ve already recomputed today. Come back tomorrow! 🎬'}
-          </Text>
-          <View style={{ height: 40 }} />
+              <Text style={styles.recomputeHint}>
+                MovieCrush Wrapped will be generated once a year. But now for testing, you can recompute once per day.
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.recomputeHint}>
+              You've already recomputed today. Come back tomorrow! 🎬{'\n'}
+              In the future, MovieCrush Wrapped will be generated once a year, but for testing you can test it every day
+            </Text>
+          )}
         </View>
       </ScrollView>
     </View>

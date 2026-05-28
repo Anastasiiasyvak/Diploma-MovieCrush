@@ -31,6 +31,9 @@ export const tmdbSeriesService = {
   getSimilarSeries: (seriesId: number) =>
     fetchTMDB<TMDBListResponse<SimilarSeries>>(`/tv/${seriesId}/similar`),
 
+  getSeriesRecommendations: (seriesId: number) =>
+    fetchTMDB<TMDBListResponse<SimilarSeries>>(`/tv/${seriesId}/recommendations`),
+
   getSeasonDetail: (seriesId: number, seasonNumber: number) =>
     fetchTMDB<SeriesSeasonDetail>(`/tv/${seriesId}/season/${seasonNumber}`),
 

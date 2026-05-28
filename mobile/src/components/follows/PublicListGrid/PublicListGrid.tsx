@@ -67,17 +67,9 @@ export const PublicListGrid: React.FC<Props> = ({ userId, listId, listType, onIt
         })
       );
 
-      const loaded: MediaMeta[] = metas.map((r, idx) => {
-        if (r.status === 'fulfilled') return r.value;
-        return {
-          tmdb_id: sliced[idx].tmdb_id,
-          title: 'Unknown',
-          poster_path: null,
-          release_date: '',
-          vote_average: 0,
-          media_type: sliced[idx].media_type as 'movie' | 'tv',
-        };
-      });
+      const loaded: MediaMeta[] = metas
+        .filter((r): r is PromiseFulfilledResult<MediaMeta> => r.status === 'fulfilled')
+        .map(r => r.value);
 
       setItems(loaded);
     } catch (e) {

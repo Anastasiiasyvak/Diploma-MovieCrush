@@ -138,6 +138,13 @@ export const getSimilarSeries = async (req: Request, res: Response): Promise<voi
   } catch (err) { handleError(res, err, 'getSimilarSeries'); }
 };
 
+export const getSeriesRecommendations = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const data = await fetchFromTMDB(`/tv/${req.params.id}/recommendations`);
+    res.json(data);
+  } catch (err) { handleError(res, err, 'getSeriesRecommendations'); }
+};
+
 export const getSeasonDetail = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id, seasonNumber } = req.params;

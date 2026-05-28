@@ -76,7 +76,7 @@ export default function SeriesScreen({ navigation, route }: any) {
         tmdbSeriesService.getSeriesCredits(seriesId),
         tmdbSeriesService.getSeriesImages(seriesId),
         tmdbSeriesService.getSeriesVideos(seriesId),
-        tmdbSeriesService.getSimilarSeries(seriesId),
+        tmdbSeriesService.getSeriesRecommendations(seriesId),
         movieService.getActions(seriesId),
         movieService.getMyLists(),
         movieService.getRating(seriesId),
@@ -87,7 +87,12 @@ export default function SeriesScreen({ navigation, route }: any) {
       setCredits(cred);
       setImages(imgs);
       setVideos(vids);
-      setSimilar(sim.results);
+      if (sim.results && sim.results.length > 0) {
+        setSimilar(sim.results);
+      } else {
+        const fallback = await tmdbSeriesService.getSimilarSeries(seriesId);
+        setSimilar(fallback.results);
+      }
       setActions(act);
       setMyLists(lists);
       setRating(rat);
