@@ -1,6 +1,15 @@
 import api from './api';
 import { MovieActions, DetailedRating, MovieComment, MoodType, UserList } from '../types/movie.types';
 
+export interface BatchMediaMeta {
+  tmdb_id: number;
+  title: string | null;
+  poster_path: string | null;
+  release_date: string;
+  vote_average: number;
+  media_type: 'movie' | 'tv';
+}
+
 export const movieService = {
   getActions: async (tmdbId: number): Promise<MovieActions> => {
     const res = await api.get(`/movies/${tmdbId}/actions`);
@@ -112,5 +121,12 @@ export const movieService = {
 
   resetAllRatings: async (tmdbId: number): Promise<void> => {
     await api.delete(`/movies/${tmdbId}/my-ratings`);
+  },
+
+  getBatchDetails: async (
+    items: { tmdb_id: number; media_type: 'movie' | 'tv' }[],
+  ): Promise<BatchMediaMeta[]> => {
+    const res = await api.post('/tmdb/media/batch', { items });
+    return res.data.items;
   },
 };

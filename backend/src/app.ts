@@ -24,8 +24,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const limiter = rateLimit({
-  windowMs: 1 * 1000,   
-  max: 30,               
+  windowMs: 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },
 });
 

@@ -34,6 +34,7 @@ interface TmdbMovieDetails {
   runtime?: number;
   poster_path?: string | null;
   genres?: TmdbGenre[];
+  vote_average?: number;
 }
 
 interface TmdbCreator {
@@ -49,6 +50,7 @@ interface TmdbSeriesDetails {
   poster_path?: string | null;
   genres?: TmdbGenre[];
   created_by?: TmdbCreator[];
+  vote_average?: number;
 }
 
 const isNotFound = (err: unknown): boolean =>
@@ -107,8 +109,8 @@ const cacheMovie = async (tmdbId: number): Promise<void> => {
   await pool.query(
     `INSERT INTO tmdb_media_cache (
        tmdb_id, media_type, title, release_year, runtime_minutes,
-       poster_path, genre_ids, director_tmdb_id, director_name, top_cast
-     ) VALUES ($1, 'movie', $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+       poster_path, genre_ids, director_tmdb_id, director_name, top_cast, vote_average
+     ) VALUES ($1, 'movie', $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
      ON CONFLICT (tmdb_id, media_type) DO NOTHING`,
     [
       tmdbId,
@@ -120,6 +122,7 @@ const cacheMovie = async (tmdbId: number): Promise<void> => {
       director?.id ?? null,
       director?.name ?? null,
       JSON.stringify(topCast),
+      details.vote_average ?? 0,
     ]
   );
 };
@@ -148,8 +151,8 @@ const cacheSeries = async (tmdbId: number): Promise<void> => {
   await pool.query(
     `INSERT INTO tmdb_media_cache (
        tmdb_id, media_type, title, release_year, runtime_minutes,
-       poster_path, genre_ids, director_tmdb_id, director_name, top_cast
-     ) VALUES ($1, 'tv', $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+       poster_path, genre_ids, director_tmdb_id, director_name, top_cast, vote_average
+     ) VALUES ($1, 'tv', $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
      ON CONFLICT (tmdb_id, media_type) DO NOTHING`,
     [
       tmdbId,
@@ -161,6 +164,7 @@ const cacheSeries = async (tmdbId: number): Promise<void> => {
       creator?.id ?? null,
       creator?.name ?? null,
       JSON.stringify(topCast),
+      details.vote_average ?? 0,
     ]
   );
 };

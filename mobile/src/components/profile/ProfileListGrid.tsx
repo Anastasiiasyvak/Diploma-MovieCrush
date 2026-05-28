@@ -8,8 +8,6 @@ import { FONTS } from '../../constants/fonts';
 import { POSTER_SIZES } from '../../constants/tmdb';
 import { CustomAlert } from '../ui/CustomAlert';
 import { movieService } from '../../services/movieService';
-import { tmdbMovieService } from '../../services/tmdbMovieService';
-import { tmdbSeriesService } from '../../services/tmdbSeriesService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAX_WIDTH = 480;
@@ -56,36 +54,23 @@ export const ProfileListGrid: React.FC<Props> = ({ listId, listType, onItemPress
       const data = await movieService.getListItems(listId);
       const sliced = data.slice(0, 30);
 
-      // Завантажую метадані паралельно визначаючи кожного тип
-      const metas = await Promise.allSettled(
-        sliced.map(async i => {
-          if (i.media_type === 'tv') {
-            const d = await tmdbSeriesService.getSeriesDetails(i.tmdb_id);
-            return {
-              tmdb_id: d.id,
-              title: d.name,
-              poster_path: d.poster_path,
-              release_date: d.first_air_date,
-              vote_average: d.vote_average,
-              media_type: 'tv' as const,
-            };
-          } else {
-            const d = await tmdbMovieService.getMovieDetails(i.tmdb_id);
-            return {
-              tmdb_id: d.id,
-              title: d.title,
-              poster_path: d.poster_path,
-              release_date: d.release_date,
-              vote_average: d.vote_average,
-              media_type: 'movie' as const,
-            };
-          }
-        })
+      const batch = await movieService.getBatchDetails(
+        sliced.map(i => ({
+          tmdb_id: i.tmdb_id,
+          media_type: (i.media_type as 'movie' | 'tv') ?? 'movie',
+        })),
       );
 
-      const loaded: MediaMeta[] = metas
-        .filter((r): r is PromiseFulfilledResult<MediaMeta> => r.status === 'fulfilled')
-        .map(r => r.value);
+      const loaded: MediaMeta[] = batch
+        .filter((m): m is MediaMeta => m.title !== null)
+        .map(m => ({
+          tmdb_id: m.tmdb_id,
+          title: m.title as string,
+          poster_path: m.poster_path,
+          release_date: m.release_date,
+          vote_average: m.vote_average,
+          media_type: m.media_type,
+        }));
 
       setItems(loaded);
     } catch (e) {

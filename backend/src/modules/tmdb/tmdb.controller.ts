@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
 import { fetchFromTMDB } from './tmdb.service';
+import pool from '../../config/database';
+import { cacheMediaIfNeeded } from '../tmdb_cache/tmdb_cache.service';
+import { parseTmdbId } from './tmdb.helpers';
 
 // тут обробник помилок проксі
 const handleError = (res: Response, err: unknown, context: string) => {
@@ -224,4 +227,96 @@ export const getPersonCombinedCredits = async (req: Request, res: Response): Pro
     const data = await fetchFromTMDB(`/person/${req.params.id}/combined_credits`);
     res.json(data);
   } catch (err) { handleError(res, err, 'getPersonCombinedCredits'); }
+};
+
+
+// Batch ендпоінт якй повертає метадані для списку одним запитом
+
+interface BatchItem {
+  tmdb_id: number;
+  media_type: 'movie' | 'tv';
+}
+
+interface BatchMeta {
+  tmdb_id: number;
+  title: string | null;
+  poster_path: string | null;
+  release_date: string;
+  vote_average: number;
+  media_type: 'movie' | 'tv';
+}
+
+const MAX_BATCH_SIZE = 50;
+
+export const getMediaBatch = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rawItems = req.body?.items;
+    if (!Array.isArray(rawItems)) {
+      res.status(400).json({ error: 'items array required' });
+      return;
+    }
+
+    const items: BatchItem[] = [];
+    for (const raw of rawItems.slice(0, MAX_BATCH_SIZE)) {
+      if (!raw || (raw.media_type !== 'movie' && raw.media_type !== 'tv')) continue;
+      const tmdbId = parseTmdbId(raw.tmdb_id);
+      if (tmdbId === null) continue;
+      items.push({ tmdb_id: tmdbId, media_type: raw.media_type });
+    }
+
+    if (items.length === 0) {
+      res.json({ items: [] });
+      return;
+    }
+
+    const readFromCache = async (): Promise<Map<string, BatchMeta>> => {
+      const map = new Map<string, BatchMeta>();
+      const tmdbIds = items.map(i => i.tmdb_id);
+      const result = await pool.query(
+        `SELECT tmdb_id, media_type, title, release_year, poster_path, vote_average
+         FROM tmdb_media_cache
+         WHERE tmdb_id = ANY($1::bigint[])`,
+        [tmdbIds],
+      );
+      for (const row of result.rows) {
+        map.set(`${row.tmdb_id}-${row.media_type}`, {
+          tmdb_id: Number(row.tmdb_id),
+          title: row.title ?? null,
+          poster_path: row.poster_path ?? null,
+          release_date: row.release_year ? String(row.release_year) : '',
+          vote_average: row.vote_average !== null ? Number(row.vote_average) : 0,
+          media_type: row.media_type,
+        });
+      }
+      return map;
+    };
+
+    let cached = await readFromCache();
+
+    const missing = items.filter(i => !cached.has(`${i.tmdb_id}-${i.media_type}`));
+    for (const item of missing) {
+      await cacheMediaIfNeeded(item.tmdb_id, item.media_type);
+    }
+
+    if (missing.length > 0) {
+      cached = await readFromCache();
+    }
+
+    const result: BatchMeta[] = items.map(i => {
+      const found = cached.get(`${i.tmdb_id}-${i.media_type}`);
+      if (found) return found;
+      return {
+        tmdb_id: i.tmdb_id,
+        title: null,
+        poster_path: null,
+        release_date: '',
+        vote_average: 0,
+        media_type: i.media_type,
+      };
+    });
+
+    res.json({ items: result });
+  } catch (err) {
+    handleError(res, err, 'getMediaBatch');
+  }
 };

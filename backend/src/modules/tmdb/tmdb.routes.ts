@@ -41,4 +41,6 @@ router.get('/tv/:id/recommendations', ctrl.getSeriesRecommendations);
 router.get('/tv/:id/season/:seasonNumber', ctrl.getSeasonDetail);
 router.get('/tv/:id/season/:seasonNumber/episode/:episodeNumber', ctrl.getEpisodeDetail);
 
+router.post('/media/batch', ctrl.getMediaBatch);
+
 export default router;
