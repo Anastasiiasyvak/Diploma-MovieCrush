@@ -225,7 +225,7 @@ const SeasonItem: React.FC<SeasonItemProps> = ({
               ) : null}
               {detail.episodes.map(ep => (
                 <EpisodeRow
-                  key={ep.id}
+                  key={`${season.season_number}x${ep.episode_number}`}
                   episode={ep}
                   seriesId={seriesId}
                   totalEpisodes={totalEpisodes}
@@ -314,7 +314,7 @@ export const SeasonsSection: React.FC<Props> = ({
       <View style={styles.list}>
         {sorted.map(season => (
           <SeasonItem
-            key={season.id}
+            key={`season-${season.season_number}`}
             season={season}
             seriesId={seriesId}
             totalEpisodes={totalEpisodes}

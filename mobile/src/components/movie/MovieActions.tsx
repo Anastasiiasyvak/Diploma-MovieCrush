@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Modal,
   FlatList, Pressable, ActivityIndicator,
@@ -8,6 +8,7 @@ import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/fonts';
 import { MovieActions, UserList } from '../../types/movie.types';
 import { movieService } from '../../services/movieService';
+import { CustomAlert } from '../ui/CustomAlert';
 
 const HeartIcon: React.FC<{ filled: boolean; size?: number }> = ({ filled, size = 26 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -77,12 +78,32 @@ export const MovieActionsBar: React.FC<Props> = ({
   const [loading, setLoading] = useState<string | null>(null);
   const [listModal, setListModal] = useState(false);
   const [listLoading, setListLoading] = useState<number | null>(null);
+  const [seriesWatchedPrompt, setSeriesWatchedPrompt] = useState(false);
 
   const [addedToLists, setAddedToLists] = useState<Set<number>>(new Set());
   const [listsChecked, setListsChecked] = useState(false);
 
   const customLists = lists.filter(l => l.list_type === 'custom');
   const hasAnyListAdded = addedToLists.size > 0;
+
+  const handleMarkAllEpisodes = async () => {
+    setSeriesWatchedPrompt(false);
+    setLoading('watched');
+    try {
+      await movieService.markAllEpisodesWatched(tmdbId);
+      const updated = await movieService.getActions(tmdbId);
+      onActionsChange(updated);
+    } catch (e) {
+      console.error('markAllEpisodes error:', e);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleSeriesWatchedOnly = () => {
+    setSeriesWatchedPrompt(false);
+    toggle('watched');
+  };
 
   // Завантажу стан при відкритті модалки і lazy - тільки коли потрібно
   const checkLists = async () => {
@@ -180,7 +201,13 @@ export const MovieActionsBar: React.FC<Props> = ({
 
         <TouchableOpacity
           style={[styles.watchBtn, actions.is_watched && styles.watchBtnActive]}
-          onPress={() => toggle('watched')}
+          onPress={() => {
+            if (mediaType === 'tv' && !actions.is_watched) {
+              setSeriesWatchedPrompt(true);
+            } else {
+              toggle('watched');
+            }
+          }}
           activeOpacity={0.7}
           disabled={loading === 'watched'}
         >
@@ -293,6 +320,16 @@ export const MovieActionsBar: React.FC<Props> = ({
           </Pressable>
         </Pressable>
       </Modal>
+
+      <CustomAlert
+        visible={seriesWatchedPrompt}
+        title="Mark all episodes?"
+        message="Do you want to mark all episodes of this series as watched too?"
+        confirmText="Yes, all episodes"
+        cancelText="Just the series"
+        onConfirm={handleMarkAllEpisodes}
+        onCancel={handleSeriesWatchedOnly}
+      />
     </>
   );
 };

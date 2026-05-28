@@ -3,6 +3,7 @@ import { AuthRequest } from '../../middleware/auth.middleware';
 import {
   getWatchedEpisodes,
   toggleEpisodeWatch,
+  markAllEpisodesWatched,
 } from './episode.service';
 import { cacheMediaIfNeeded } from '../tmdb_cache/tmdb_cache.service';
 
@@ -34,15 +35,35 @@ export const toggleEpisode = async (req: AuthRequest, res: Response) => {
       series_tmdb_id, season_number, episode_number,
       episode_tmdb_id, total_episodes_in_series, total_seasons_in_series,
     });
-    
+
     cacheMediaIfNeeded(series_tmdb_id, 'tv').catch((err) => {
       console.error('cacheMediaIfNeeded failed for series', series_tmdb_id, err);
     });
 
-
     res.json(result);
   } catch (err) {
     console.error('toggleEpisode error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const markAllEpisodes = async (req: AuthRequest, res: Response) => {
+  try {
+    const { series_tmdb_id } = req.body;
+    if (!series_tmdb_id) {
+      res.status(400).json({ error: 'series_tmdb_id required' });
+      return;
+    }
+
+    const result = await markAllEpisodesWatched(req.userId!, series_tmdb_id);
+
+    cacheMediaIfNeeded(series_tmdb_id, 'tv').catch((err) => {
+      console.error('cacheMediaIfNeeded failed for series', series_tmdb_id, err);
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error('markAllEpisodes error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

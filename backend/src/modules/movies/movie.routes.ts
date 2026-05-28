@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../../middleware/auth.middleware';
-import { fetchWatchedEpisodes, toggleEpisode } from './episode.controller';
+import { fetchWatchedEpisodes, toggleEpisode, markAllEpisodes } from './episode.controller';
 import {
   getActions, toggleAction,
   fetchListItems, getLists, addToList, removeFromList,
@@ -47,5 +47,6 @@ router.delete('/movies/:tmdbId/my-ratings', resetMyRatings);
 
 router.get('/series/:seriesTmdbId/watched-episodes', fetchWatchedEpisodes);
 router.post('/series/episode/toggle', toggleEpisode);
+router.post('/series/episode/mark-all', markAllEpisodes);
 
 export default router;

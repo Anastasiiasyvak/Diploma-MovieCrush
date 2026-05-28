@@ -16,6 +16,16 @@ export const movieService = {
     return res.data;
   },
 
+  markAllEpisodesWatched: async (seriesTmdbId: number): Promise<{
+    episodes_added: number;
+    episodes_watched_count: number;
+  }> => {
+    const res = await api.post('/series/episode/mark-all', {
+      series_tmdb_id: seriesTmdbId,
+    });
+    return res.data;
+  },
+
   getMyLists: async (): Promise<UserList[]> => {
     const res = await api.get('/movies/my-lists');
     return res.data.lists;
