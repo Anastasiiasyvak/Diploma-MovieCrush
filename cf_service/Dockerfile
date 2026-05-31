@@ -40,6 +40,8 @@ RUN pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.t
 # Копіює код CF-сервісу
 COPY . .
 
+WORKDIR /app/src
+
 # main.py запускає uvicorn на 8000, але для App Runner відкриваю порт явно через env
 ENV PORT=8000
 EXPOSE 8000
