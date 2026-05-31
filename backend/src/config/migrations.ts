@@ -169,37 +169,6 @@ const createTables = async () => {
     console.log('Table user_best_actor_votes ready');
 
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS user_yearly_stats (
-        id                   BIGSERIAL PRIMARY KEY,
-        user_id              BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        year                 INT NOT NULL,
-        movies_watched       INT DEFAULT 0,
-        series_watched       INT DEFAULT 0,
-        episodes_watched     INT DEFAULT 0,
-        total_hours          DECIMAL(6,1) DEFAULT 0.0,
-        top_director_tmdb_id INT,
-        top_director_name    VARCHAR(100),
-        top_genre_id         INT,
-        top_genre_name       VARCHAR(50),
-        top_actor_1_tmdb_id  INT,
-        top_actor_1_name     VARCHAR(100),
-        top_actor_2_tmdb_id  INT,
-        top_actor_2_name     VARCHAR(100),
-        top_actor_3_tmdb_id  INT,
-        top_actor_3_name     VARCHAR(100),
-        favorite_movie_tmdb_id INT,
-        favorite_movie_title   VARCHAR(255),
-        most_watched_month     SMALLINT CHECK (most_watched_month BETWEEN 1 AND 12),
-        average_rating         DECIMAL(3,1) DEFAULT 0.0,
-        total_reviews          INT DEFAULT 0,
-        created_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE (user_id, year)
-      );
-    `);
-    console.log('Table user_yearly_stats ready');
-
-    await pool.query(`
       CREATE TABLE IF NOT EXISTS user_follows (
         id BIGSERIAL PRIMARY KEY,
         follower_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -514,7 +483,7 @@ const createTables = async () => {
       ALTER TABLE tmdb_media_cache 
         ADD COLUMN IF NOT EXISTS vote_average DECIMAL(4,2) DEFAULT 0;
     `);
-    console.log('vote_average column ready');
+    console.log('vote_average column ready');    
     console.log('All tables created successfully');
 
   } catch (err) {

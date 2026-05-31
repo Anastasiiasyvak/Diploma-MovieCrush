@@ -150,52 +150,52 @@ describe('weightedSum', () => {
 
   it('weights sum to exactly 1.0 (sanity check on constants)', () => {
     const total = WEIGHTS.rating + WEIGHTS.genre + WEIGHTS.actor +
-                  WEIGHTS.mood + WEIGHTS.director + WEIGHTS.disliked;
+                  WEIGHTS.mood + WEIGHTS.disliked;
     expect(total).toBeCloseTo(1.0, 10);
   });
 
   it('returns 1 when all metrics are 1 (because weights sum to 1)', () => {
     expect(weightedSum({
-      rating: 1, genre: 1, actor: 1, mood: 1, director: 1, disliked: 1,
+      rating: 1, genre: 1, actor: 1, mood: 1, disliked: 1,
     })).toBeCloseTo(1, 10);
   });
 
   it('returns 0 when all metrics are 0', () => {
     expect(weightedSum({
-      rating: 0, genre: 0, actor: 0, mood: 0, director: 0, disliked: 0,
+      rating: 0, genre: 0, actor: 0, mood: 0, disliked: 0,
     })).toBe(0);
   });
 
   it('returns exactly the rating weight when only rating is 1', () => {
     expect(weightedSum({
-      rating: 1, genre: 0, actor: 0, mood: 0, director: 0, disliked: 0,
+      rating: 1, genre: 0, actor: 0, mood: 0, disliked: 0,
     })).toBeCloseTo(WEIGHTS.rating, 10);
   });
 
   it('returns exactly the disliked weight when only disliked is 1', () => {
     expect(weightedSum({
-      rating: 0, genre: 0, actor: 0, mood: 0, director: 0, disliked: 1,
+      rating: 0, genre: 0, actor: 0, mood: 0, disliked: 1,
     })).toBeCloseTo(WEIGHTS.disliked, 10);
   });
 
   it('computes a realistic mixed score correctly', () => {
-    // rating .9*.4 + genre .5*.2 + actor .3*.15 + mood .6*.1 + director .2*.1 + disliked .1*.05
-    // = .36 + .10 + .045 + .06 + .02 + .005 = .59
+    // rating .9*.45 + genre .5*.22 + actor .3*.16 + mood .6*.11 + disliked .1*.06
+    // = .405 + .11 + .048 + .066 + .006 = .635
     const score = weightedSum({
-      rating: 0.9, genre: 0.5, actor: 0.3, mood: 0.6, director: 0.2, disliked: 0.1,
+      rating: 0.9, genre: 0.5, actor: 0.3, mood: 0.6, disliked: 0.1,
     });
-    expect(score).toBeCloseTo(0.59, 6);
+    expect(score).toBeCloseTo(0.635, 6);
   });
 
   it('rating contributes more than disliked for the same metric value', () => {
-    const onlyRating = weightedSum({ rating: 0.5, genre: 0, actor: 0, mood: 0, director: 0, disliked: 0 });
-    const onlyDisliked = weightedSum({ rating: 0, genre: 0, actor: 0, mood: 0, director: 0, disliked: 0.5 });
+    const onlyRating = weightedSum({ rating: 0.5, genre: 0, actor: 0, mood: 0, disliked: 0 });
+    const onlyDisliked = weightedSum({ rating: 0, genre: 0, actor: 0, mood: 0, disliked: 0.5 });
     expect(onlyRating).toBeGreaterThan(onlyDisliked);
   });
 
   it('result stays within [0, 1] for any valid inputs', () => {
     const score = weightedSum({
-      rating: 0.7, genre: 0.8, actor: 0.6, mood: 0.9, director: 0.4, disliked: 0.3,
+      rating: 0.7, genre: 0.8, actor: 0.6, mood: 0.9, disliked: 0.3,
     });
     expect(score).toBeGreaterThanOrEqual(0);
     expect(score).toBeLessThanOrEqual(1);

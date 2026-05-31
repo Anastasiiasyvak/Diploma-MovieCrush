@@ -107,26 +107,6 @@ const computeMoodSimilarity = async (
   return cosineSimilarityFromCounts(moodsA, moodsB);
 };
 
-const computeDirectorOverlap = async (
-  userA: number, userB: number
-): Promise<number> => {
-  const [resA, resB] = await Promise.all([
-    pool.query(
-      `SELECT DISTINCT top_director_tmdb_id FROM user_yearly_stats
-       WHERE user_id = $1 AND top_director_tmdb_id IS NOT NULL`,
-      [userA]
-    ),
-    pool.query(
-      `SELECT DISTINCT top_director_tmdb_id FROM user_yearly_stats
-       WHERE user_id = $1 AND top_director_tmdb_id IS NOT NULL`,
-      [userB]
-    ),
-  ]);
-  const setA = new Set(resA.rows.map(r => Number(r.top_director_tmdb_id)));
-  const setB = new Set(resB.rows.map(r => Number(r.top_director_tmdb_id)));
-  return jaccard(setA, setB);
-};
-
 const computeDislikedOverlap = async (
   userA: number, userB: number
 ): Promise<{ similarity: number; sharedDisliked: number[] }> => {
@@ -163,14 +143,12 @@ export const computeHybridSimilarity = async (
     genre,
     actor,
     mood,
-    director,
     disliked,
   ] = await Promise.all([
     computeRatingCosineSimilarity(userA, userB),
     computeWatchedOverlap(userA, userB),
     computeActorOverlap(userA, userB),
     computeMoodSimilarity(userA, userB),
-    computeDirectorOverlap(userA, userB),
     computeDislikedOverlap(userA, userB),
   ]);
 
@@ -179,7 +157,6 @@ export const computeHybridSimilarity = async (
     genre,
     actor,
     mood,
-    director,
     disliked: disliked.similarity,
   });
 
@@ -189,7 +166,7 @@ export const computeHybridSimilarity = async (
     genre_similarity: genre,
     actor_similarity: actor,
     mood_similarity: mood,
-    director_similarity: director,
+    director_similarity: 0,
     disliked_similarity: disliked.similarity,
     sharedMovies: rating.sharedMovies,
     sharedDisliked: disliked.sharedDisliked,

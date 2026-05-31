@@ -5,7 +5,6 @@ export interface SoulmateBreakdown {
   genre: number;
   actor: number;
   mood: number;
-  director: number;
   disliked: number;
 }
 

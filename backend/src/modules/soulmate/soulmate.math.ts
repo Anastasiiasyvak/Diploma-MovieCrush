@@ -2,12 +2,11 @@ export const RECOMPUTE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 
 export const WEIGHTS = {
-  rating: 0.40,
-  genre: 0.20,
-  actor: 0.15,
-  mood: 0.10,
-  director: 0.10,
-  disliked: 0.05,
+  rating: 0.45,
+  genre: 0.22,
+  actor: 0.16,
+  mood: 0.11,
+  disliked: 0.06,
 } as const;
 
 
@@ -79,25 +78,23 @@ export interface SimilarityScores {
   genre: number;
   actor: number;
   mood: number;
-  director: number;
   disliked: number;
 }
 
 
-// Зважена сума 6 метрик схожості за константами WEIGHTS
+// Зважена сума 5 метрик схожості за константами WEIGHTS
 export const weightedSum = (scores: SimilarityScores): number => {
   return (
     WEIGHTS.rating * scores.rating +
     WEIGHTS.genre * scores.genre +
     WEIGHTS.actor * scores.actor +
     WEIGHTS.mood * scores.mood +
-    WEIGHTS.director * scores.director +
     WEIGHTS.disliked * scores.disliked
   );
 };
 
 
-// перевіряє через кулдоун чи можна зробить recompute 
+// перевіряє через кулдоун чи можна зробить recompute
 export const isRecomputeThrottled = (
   lastComputedAt: Date | null,
   now: Date = new Date()

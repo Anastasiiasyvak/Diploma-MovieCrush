@@ -1,4 +1,4 @@
-# Web framework
+﻿# Web framework
 fastapi==0.115.0
 uvicorn==0.30.0
 
@@ -15,5 +15,4 @@ scipy==1.17.1
 scikit-learn==1.5.2
 matplotlib==3.9.2
 
-# Progress bars (transitively required by implicit, але краще зафіксувати явно)
 tqdm==4.66.5

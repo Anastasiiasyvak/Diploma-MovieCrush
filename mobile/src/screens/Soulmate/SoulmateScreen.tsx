@@ -209,7 +209,6 @@ export default function SoulmateScreen({ navigation }: any) {
               <BreakdownBar label="Watched" value={match.breakdown.genre} />
               <BreakdownBar label="Actors" value={match.breakdown.actor} />
               <BreakdownBar label="Mood" value={match.breakdown.mood} />
-              <BreakdownBar label="Directors" value={match.breakdown.director} />
               <BreakdownBar label="Disliked" value={match.breakdown.disliked} />
 
               <Text style={styles.sectionTitle}>Shared</Text>
