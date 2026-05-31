@@ -12,6 +12,7 @@ _pool = None
 def _get_pool():
     global _pool
     if _pool is None:
+        sslmode = "require" if os.getenv("DB_SSL") == "true" else "disable"
         _pool = pg_pool.SimpleConnectionPool(
             minconn=1,
             maxconn=10,
@@ -20,6 +21,7 @@ def _get_pool():
             dbname=os.getenv("DB_NAME"),
             user=os.getenv("DB_USER"),
             password=os.getenv("DB_PASSWORD"),
+            sslmode=sslmode,
         )
     return _pool
 
