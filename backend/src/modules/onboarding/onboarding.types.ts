@@ -1,3 +1,5 @@
+import { MediaType } from "../shared/user.types";
+
 export interface OnboardingActor {
   id: number;
   tmdb_id: number;
@@ -14,7 +16,7 @@ export interface OnboardingMovie {
   year: number;
   genre: string;
   batch: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
 }
 
 export interface OnboardingContent {

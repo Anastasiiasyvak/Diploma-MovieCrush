@@ -7,8 +7,8 @@ import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/fonts';
 import { POSTER_SIZES } from '../../constants/tmdb';
 import { SearchTab } from './SearchBar';
+import { MediaType } from '../../types/tmdb.types';
 
-// ── Layout (3 cols — як в Recommendations) ────────────────────────────────────
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAX_WIDTH  = 480;
 const CONTENT_W  = Math.min(SCREEN_WIDTH, MAX_WIDTH);
@@ -18,10 +18,9 @@ const SIDE_PAD   = 16;
 const CARD_W     = (CONTENT_W - SIDE_PAD * 2 - CARD_GAP * (COLS - 1)) / COLS;
 const CARD_H     = CARD_W * 1.5;
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 export interface MediaResult {
   id: number;
-  mediaType: 'movie' | 'tv';
+  mediaType: MediaType;
   title: string;
   year: string;
   posterPath: string | null;
@@ -56,7 +55,6 @@ interface SearchResultsViewProps {
   navigation?: any;
 }
 
-// ── Media card ────────────────────────────────────────────────────────────────
 const MediaCard: React.FC<{
   item: MediaResult;
   index: number;
@@ -97,7 +95,6 @@ const MediaCard: React.FC<{
   );
 };
 
-// ── Cast card ─────────────────────────────────────────────────────────────────
 const CastCard: React.FC<{
   item: CastResult;
   index: number;
@@ -134,7 +131,6 @@ const CastCard: React.FC<{
   );
 };
 
-// ── User card ─────────────────────────────────────────────────────────────────
 const UserCard: React.FC<{
   item: UserResult;
   onPress: () => void;
@@ -176,7 +172,6 @@ const UserCard: React.FC<{
   );
 };
 
-// ── Main component ────────────────────────────────────────────────────────────
 export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
   tab,
   isLoading,
@@ -328,7 +323,6 @@ export const SearchResultsView: React.FC<SearchResultsViewProps> = ({
   );
 };
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   center: {
     flex: 1,
@@ -465,7 +459,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // ── User card styles ────────────────────────────────────────────────────────
   usersList: {
     paddingHorizontal: SIDE_PAD,
   },

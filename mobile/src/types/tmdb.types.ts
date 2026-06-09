@@ -29,7 +29,9 @@ export interface TMDBResponse<T> {
   total_results: number;
 }
 
-export type MediaItem = (Movie | TVSeries) & { mediaType: 'movie' | 'tv' };
+export type MediaType = 'movie' | 'tv';
+
+export type MediaItem = (Movie | TVSeries) & { mediaType: MediaType };
 
 export type ContentType =
   | 'movie'

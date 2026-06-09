@@ -13,9 +13,7 @@ import { styles } from './SoulmateScreen.styles';
 
 const RECOMPUTE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
-
-const isRecomputeCoolingDown = (computedAt?: string | null): boolean => {
-  if (!computedAt) return false;
+const isRecomputeCoolingDown = (computedAt: string): boolean => {
   const elapsed = Date.now() - new Date(computedAt).getTime();
   return elapsed < RECOMPUTE_COOLDOWN_MS;
 };

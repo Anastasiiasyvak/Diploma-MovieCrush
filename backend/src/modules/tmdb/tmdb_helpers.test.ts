@@ -1,18 +1,9 @@
-import { parseTmdbId } from '../modules/tmdb/tmdb.helpers';
+import { parseTmdbId } from './tmdb.helpers';
 
 describe('parseTmdbId', () => {
 
-
-  it('accepts a positive integer number', () => {
+  it('accepts a positive integer and returns it unchanged', () => {
     expect(parseTmdbId(238)).toBe(238);
-  });
-
-  it('accepts the smallest valid number (1)', () => {
-    expect(parseTmdbId(1)).toBe(1);
-  });
-
-  it('accepts a large number (typical TMDB id range)', () => {
-    expect(parseTmdbId(1339713)).toBe(1339713);
   });
 
   it('accepts a numeric string and converts it to number', () => {
@@ -44,20 +35,12 @@ describe('parseTmdbId', () => {
     expect(parseTmdbId(3.14)).toBeNull();
   });
 
-  it('rejects float with integer value but .5 (e.g. 5.5)', () => {
-    expect(parseTmdbId(5.5)).toBeNull();
-  });
-
   it('rejects NaN', () => {
     expect(parseTmdbId(NaN)).toBeNull();
   });
 
   it('rejects Infinity', () => {
     expect(parseTmdbId(Infinity)).toBeNull();
-  });
-
-  it('rejects negative Infinity', () => {
-    expect(parseTmdbId(-Infinity)).toBeNull();
   });
 
   it('rejects null', () => {

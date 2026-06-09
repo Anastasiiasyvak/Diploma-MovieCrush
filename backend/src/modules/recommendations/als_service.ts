@@ -1,4 +1,5 @@
 import pool from '../../config/database';
+import { MediaType } from '../shared/user.types';
 import { fetchFromTMDB } from '../tmdb/tmdb.service';
 import { rerankWithGemini } from './recommendations.service';
 
@@ -10,7 +11,7 @@ const CANDIDATE_POOL = 40;   // скільки тягнемо з кожного 
 
 export interface AlsItem {
   tmdb_id: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
   title: string;
   poster_path: string | null;
   vote_average: number;
@@ -24,7 +25,7 @@ export interface TaggedItem extends AlsItem {
 
 export interface PersonalizedItem {
   tmdb_id: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
   title: string;
   poster_path: string | null;
   vote_average: number;
@@ -50,7 +51,7 @@ interface CfServiceResponse {
 
 export interface CacheRow {
   tmdb_id: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
   title: string | null;
   poster_path: string | null;
   release_year: number | null;
@@ -83,7 +84,7 @@ interface TmdbDiscoverResult {
 
 type ContentBucket = 'movie' | 'tv' | 'anime' | 'anime_movie' | 'dorama' | 'animation';
 
-const getContentBucket = (m: { tmdb_id: number; genre: string; media_type: 'movie' | 'tv' }): ContentBucket => {
+const getContentBucket = (m: { tmdb_id: number; genre: string; media_type: MediaType }): ContentBucket => {
   const g = m.genre.toLowerCase();
   if (m.media_type === 'tv') {
     if (g === 'anime') return 'anime';
@@ -101,7 +102,7 @@ interface UserProfile {
   allowedBuckets: Set<ContentBucket>; 
 }
 
-export const mediaTypeFromTmdb = (d: { title?: string; name?: string }): 'movie' | 'tv' =>
+export const mediaTypeFromTmdb = (d: { title?: string; name?: string }): MediaType =>
   !!d.title ? 'movie' : 'tv';
 
 export const releaseYearFromTmdb = (d: { release_date?: string; first_air_date?: string }): number | null => {

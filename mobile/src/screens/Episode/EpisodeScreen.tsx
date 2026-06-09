@@ -97,7 +97,7 @@ export default function EpisodeScreen({ navigation, route }: any) {
     setRating(updated);
     setRatingLoading(true);
     try {
-      const saved = await movieService.saveRating(ratingId, updated);
+      const saved = await movieService.saveRating(ratingId, updated, true);
       setRating(saved);
       if (key === 'overall_rating' && val !== null && !isWatched) {
         await handleWatchToggle();

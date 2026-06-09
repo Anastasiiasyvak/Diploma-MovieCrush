@@ -4,10 +4,10 @@ export interface SeasonSummary {
 }
 
 export const buildAllEpisodesList = (
-  seasons: SeasonSummary[] | undefined
+  seasons: SeasonSummary[]
 ): { season: number; episode: number }[] => {
   const result: { season: number; episode: number }[] = [];
-  for (const season of seasons ?? []) {
+  for (const season of seasons) {
     if (season.season_number === 0) continue; 
     for (let ep = 1; ep <= season.episode_count; ep++) {
       result.push({ season: season.season_number, episode: ep });

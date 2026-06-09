@@ -9,6 +9,7 @@ import { FONTS } from '../../constants/fonts';
 import { MovieActions, UserList } from '../../types/movie.types';
 import { movieService } from '../../services/movieService';
 import { CustomAlert } from '../ui/CustomAlert';
+import { MediaType } from '../../types/tmdb.types';
 
 const HeartIcon: React.FC<{ filled: boolean; size?: number }> = ({ filled, size = 26 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -65,7 +66,7 @@ const ListIcon: React.FC<{ active: boolean; size?: number }> = ({ active, size =
 
 interface Props {
   tmdbId: number;
-  mediaType?: 'movie' | 'tv';
+  mediaType?: MediaType;
   actions: MovieActions;
   lists: UserList[];
   onActionsChange: (actions: MovieActions) => void;

@@ -1,6 +1,7 @@
 import api from './api';
 import {
   Movie, TVSeries, TMDBResponse, MediaItem, DiscoverFilters,
+  MediaType,
 } from '../types/tmdb.types';
 import { PersonDetails, PersonCredits } from '../types/person.types';
 
@@ -48,7 +49,7 @@ export const fetchRecommendations = async (
   seed = 0,
 ): Promise<MediaItem[]> => {
   const mt = filters.mediaType;
-  const baseType: 'movie' | 'tv' =
+  const baseType: MediaType =
     mt === 'movie' || mt === 'animation' ? 'movie' : 'tv';
 
   const buildParams = (page: number, langOverride?: string): Record<string, string> => {

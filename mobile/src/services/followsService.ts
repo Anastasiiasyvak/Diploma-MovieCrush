@@ -1,3 +1,4 @@
+import { MediaType } from '../types/tmdb.types';
 import api from './api';
 
 export interface PublicUserProfile {
@@ -47,7 +48,7 @@ export interface PublicListSummary {
 
 export interface ListItemRaw {
   tmdb_id: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
   added_at: string;
 }
 

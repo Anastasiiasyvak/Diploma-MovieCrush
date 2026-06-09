@@ -1,5 +1,6 @@
 import api from './api';
 import { MovieActions, DetailedRating, MovieComment, MoodType, UserList } from '../types/movie.types';
+import { MediaType } from '../types/tmdb.types';
 
 export interface BatchMediaMeta {
   tmdb_id: number;
@@ -7,7 +8,7 @@ export interface BatchMediaMeta {
   poster_path: string | null;
   release_date: string;
   vote_average: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
 }
 
 export const movieService = {
@@ -19,7 +20,7 @@ export const movieService = {
   toggleAction: async (
     tmdbId: number,
     action: 'favorite' | 'watchlist' | 'watched' | 'dislike',
-    mediaType: 'movie' | 'tv' = 'movie',
+    mediaType: MediaType = 'movie',
   ): Promise<MovieActions> => {
     const res = await api.post('/movies/actions', { tmdb_id: tmdbId, action, media_type: mediaType });
     return res.data;
@@ -45,7 +46,7 @@ export const movieService = {
     return res.data.items;
   },
 
-  addToList: async (listId: number, tmdbId: number, mediaType: 'movie' | 'tv' = 'movie'): Promise<void> => {
+  addToList: async (listId: number, tmdbId: number, mediaType: MediaType = 'movie'): Promise<void> => {
     await api.post('/movies/lists/add', { list_id: listId, tmdb_id: tmdbId, media_type: mediaType });
   },
 
@@ -62,8 +63,8 @@ export const movieService = {
     return res.data;
   },
 
-  saveRating: async (tmdbId: number, rating: Partial<DetailedRating>): Promise<DetailedRating> => {
-    const res = await api.post('/movies/rating', { tmdb_id: tmdbId, ...rating });
+  saveRating: async (tmdbId: number, rating: Partial<DetailedRating>, isEpisode = false): Promise<DetailedRating> => {
+    const res = await api.post('/movies/rating', { tmdb_id: tmdbId, ...rating, is_episode: isEpisode });
     return res.data;
   },
 
@@ -124,7 +125,7 @@ export const movieService = {
   },
 
   getBatchDetails: async (
-    items: { tmdb_id: number; media_type: 'movie' | 'tv' }[],
+    items: { tmdb_id: number; media_type: MediaType }[],
   ): Promise<BatchMediaMeta[]> => {
     const res = await api.post('/tmdb/media/batch', { items });
     return res.data.items;

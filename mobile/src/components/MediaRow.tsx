@@ -4,11 +4,12 @@ import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 import { MovieCard } from './MovieCard';
 import { Movie, TVSeries } from '../services/tmdbService';
+import { MediaType } from '../types/tmdb.types';
 
 interface SectionProps {
   title: string;
   data: (Movie | TVSeries)[];
-  type: 'movie' | 'tv';
+  type: MediaType;
   onItemPress?: (item: Movie | TVSeries) => void;
 }
 

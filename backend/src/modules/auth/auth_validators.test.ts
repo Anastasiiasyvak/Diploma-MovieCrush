@@ -2,9 +2,8 @@ import {
   validatePassword,
   validateEmail,
   validateUsername,
-} from '../modules/auth/auth.validators';
+} from './auth.validators';
 
-// validatePassword
 
 describe('validatePassword', () => {
 
@@ -53,7 +52,6 @@ describe('validatePassword', () => {
   });
 });
 
-// validateEmail
 
 describe('validateEmail', () => {
 
@@ -100,7 +98,6 @@ describe('validateEmail', () => {
   });
 });
 
-// validateUsername
 
 describe('validateUsername', () => {
 

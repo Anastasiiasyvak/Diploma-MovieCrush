@@ -40,7 +40,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 
   return (
     <View style={styles.wrapper}>
-      {/* ── Input row ── */}
       <View style={styles.inputRow}>
         <TouchableOpacity
           style={[styles.inputWrap, isActive && styles.inputWrapActive]}
@@ -73,7 +72,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         )}
       </View>
 
-      {/* ── Tabs ── */}
       {isActive && (
         <View style={styles.tabs}>
           {TABS.map(tab => {

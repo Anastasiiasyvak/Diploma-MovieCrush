@@ -3,19 +3,20 @@ import { fetchFromTMDB } from '../tmdb/tmdb.service';
 import { callGemini, getModelName } from './gemini.service';
 import { PersonalizedItem, PersonalizedResponse, TaggedItem } from './als_service';
 import { WatchedMovieForPrompt } from './recommendations.types';
+import { MediaType } from '../shared/user.types';
 
 const CACHE_TTL_HOURS = 24;
 const WATCHED_SAMPLE_SIZE = 10;  
 const MIN_ACCEPTABLE = 5;
 
 interface WatchedRow extends WatchedMovieForPrompt {
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
   _updatedAt: Date;
 }
 
 const resolveTitleFromTmdb = async (
   tmdbId: number,
-): Promise<{ title: string; media_type: 'movie' | 'tv' } | null> => {
+): Promise<{ title: string; media_type: MediaType } | null> => {
   try {
     const movie = await fetchFromTMDB<{ title?: string }>(`/movie/${tmdbId}`);
     if (movie.title) return { title: movie.title, media_type: 'movie' };

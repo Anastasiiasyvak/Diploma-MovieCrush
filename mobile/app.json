@@ -21,7 +21,8 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anastasiia_syvak.moviecrush"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -34,6 +35,11 @@
       "./assets/fonts/Poppins-Medium.ttf",
       "./assets/fonts/Poppins-SemiBold.ttf",
       "./assets/fonts/Poppins-Bold.ttf"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "dd7b9783-6b10-4336-aec4-2c6f46f818f4"
+      }
+    }
   }
 }

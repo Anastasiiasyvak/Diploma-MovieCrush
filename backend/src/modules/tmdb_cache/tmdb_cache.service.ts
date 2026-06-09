@@ -1,4 +1,5 @@
 import pool from '../../config/database';
+import { MediaType } from '../shared/user.types';
 import { fetchFromTMDB } from '../tmdb/tmdb.service';
 
 interface CastMember {
@@ -58,7 +59,7 @@ const isNotFound = (err: unknown): boolean =>
 
 export const cacheMediaIfNeeded = async (
   tmdbId: number,
-  mediaType: 'movie' | 'tv'
+  mediaType: MediaType
 ): Promise<void> => {
   try {
     const existing = await pool.query(
@@ -69,9 +70,9 @@ export const cacheMediaIfNeeded = async (
     if (existing.rows.length > 0) return;
 
     const primary = mediaType;
-    const secondary: 'movie' | 'tv' = mediaType === 'movie' ? 'tv' : 'movie';
+    const secondary: MediaType = mediaType === 'movie' ? 'tv' : 'movie';
 
-    const cacheFor = (type: 'movie' | 'tv') =>
+    const cacheFor = (type: MediaType) =>
       type === 'movie' ? cacheMovie(tmdbId) : cacheSeries(tmdbId);
 
     try {

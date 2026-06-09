@@ -283,7 +283,7 @@ export const upsertRating = async (
   try {
     await client.query('BEGIN');
 
-    if (input.overall_rating != null) {
+    if (input.overall_rating != null && !input.is_episode) {
       await client.query(
         `INSERT INTO user_movie_actions (user_id, tmdb_id, is_watched)
          VALUES ($1, $2, TRUE)

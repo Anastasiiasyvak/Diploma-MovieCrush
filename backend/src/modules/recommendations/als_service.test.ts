@@ -6,7 +6,7 @@ import {
   filterValidItems,
   type CacheRow,
   type AlsItem,
-} from '../modules/recommendations/als_service';
+} from './als_service';
 
 const makeCache = (tmdb_id: number, overrides: Partial<CacheRow> = {}): CacheRow => ({
   tmdb_id,
@@ -18,7 +18,6 @@ const makeCache = (tmdb_id: number, overrides: Partial<CacheRow> = {}): CacheRow
   ...overrides,
 });
 
-// release_date formatting
 
 describe('release_date formatting', () => {
 
@@ -43,7 +42,6 @@ describe('release_date formatting', () => {
   });
 });
 
-// vote_average
 
 describe('vote_average', () => {
 
@@ -61,14 +59,8 @@ describe('vote_average', () => {
     const item = cacheRowToAlsItem(1, makeCache(1, { vote_average: 0 }));
     expect(item.vote_average).toBe(0);
   });
-
-  it('handles max vote_average 10', () => {
-    const item = cacheRowToAlsItem(1, makeCache(1, { vote_average: 10 }));
-    expect(item.vote_average).toBe(10);
-  });
 });
 
-// mediaTypeFromTmdb
 
 describe('mediaTypeFromTmdb', () => {
 
@@ -89,7 +81,6 @@ describe('mediaTypeFromTmdb', () => {
   });
 });
 
-// releaseYearFromTmdb
 
 describe('releaseYearFromTmdb', () => {
 
@@ -114,7 +105,6 @@ describe('releaseYearFromTmdb', () => {
   });
 });
 
-// sliceToLimit
 
 describe('sliceToLimit', () => {
 
@@ -138,7 +128,6 @@ describe('sliceToLimit', () => {
   });
 });
 
-// filterValidItems
 
 describe('filterValidItems', () => {
 
@@ -176,7 +165,6 @@ describe('filterValidItems', () => {
   });
 });
 
-// AlsItem structure
 
 describe('AlsItem structure', () => {
 

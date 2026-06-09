@@ -1,8 +1,9 @@
+import { MediaType } from '../types/tmdb.types';
 import api from './api';
 
 export interface PersonalizedItem {
   tmdb_id: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
   title: string;
   poster_path: string | null;
   vote_average: number;
@@ -22,7 +23,7 @@ export interface PersonalizedResponse {
 
 export interface ColdStartItem {
   tmdb_id: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
   title: string;
   poster_path: string | null;
   vote_average: number;

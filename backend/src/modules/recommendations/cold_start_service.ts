@@ -1,4 +1,5 @@
 import pool from '../../config/database';
+import { MediaType } from '../shared/user.types';
 import { fetchFromTMDB } from '../tmdb/tmdb.service';
 
 interface OnboardingData {
@@ -10,7 +11,7 @@ interface OnboardingData {
 export interface OnboardingMovie {
   tmdb_id: number;
   genre: string;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
 }
 
 interface TmdbDiscoverResult {
@@ -31,7 +32,7 @@ interface TmdbDiscoverResult {
 
 export interface ColdStartItem {
   tmdb_id: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
   title: string;
   poster_path: string | null;
   vote_average: number;

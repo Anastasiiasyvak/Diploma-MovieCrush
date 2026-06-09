@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { MediaType } from '../shared/user.types';
 import { fetchFromTMDB } from './tmdb.service';
 import pool from '../../config/database';
 import { cacheMediaIfNeeded } from '../tmdb_cache/tmdb_cache.service';
@@ -234,7 +235,7 @@ export const getPersonCombinedCredits = async (req: Request, res: Response): Pro
 
 interface BatchItem {
   tmdb_id: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
 }
 
 interface BatchMeta {
@@ -243,7 +244,7 @@ interface BatchMeta {
   poster_path: string | null;
   release_date: string;
   vote_average: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
 }
 
 const MAX_BATCH_SIZE = 50;

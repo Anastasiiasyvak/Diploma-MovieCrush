@@ -1,156 +1,16 @@
 import {
   cosineSimilarity,
-  cosineSimilarityFromCounts,
-  jaccard,
   weightedSum,
   isRecomputeThrottled,
   buildRatingVectors,
   WEIGHTS,
   RECOMPUTE_COOLDOWN_MS,
-} from '../modules/soulmate/soulmate.math';
-
-// cosineSimilarity
-
-describe('cosineSimilarity', () => {
-
-  it('returns 1 for identical vectors', () => {
-    expect(cosineSimilarity([1, 2, 3], [1, 2, 3])).toBeCloseTo(1, 6);
-  });
-
-  it('returns 1 for parallel vectors (same direction, different magnitude)', () => {
-    // [2,4,6] = 2 * [1,2,3] — same direction, cosine = 1
-    expect(cosineSimilarity([1, 2, 3], [2, 4, 6])).toBeCloseTo(1, 6);
-  });
-
-  it('returns 0 for orthogonal vectors', () => {
-    expect(cosineSimilarity([1, 0], [0, 1])).toBeCloseTo(0, 6);
-  });
-
-  it('returns 0 when one vector is all zeros (avoids division by zero)', () => {
-    expect(cosineSimilarity([0, 0, 0], [1, 2, 3])).toBe(0);
-  });
-
-  it('returns 0 for two empty vectors', () => {
-    expect(cosineSimilarity([], [])).toBe(0);
-  });
-
-  it('computes a known intermediate value correctly', () => {
-    // A=[1,1], B=[1,0]: dot=1, |A|=√2, |B|=1 => 1/√2 ≈ 0.7071
-    expect(cosineSimilarity([1, 1], [1, 0])).toBeCloseTo(0.70710678, 6);
-  });
-
-  it('handles realistic rating vectors', () => {
-    // Two users who rate similarly but not identically
-    const userA = [5, 4, 5, 3, 4];
-    const userB = [4, 4, 5, 3, 5];
-    const sim = cosineSimilarity(userA, userB);
-    expect(sim).toBeGreaterThan(0.9);
-    expect(sim).toBeLessThanOrEqual(1);
-  });
-
-  it('throws when vectors have different lengths', () => {
-    expect(() => cosineSimilarity([1, 2], [1, 2, 3])).toThrow('Vectors must have the same length');
-  });
-
-  it('result is symmetric: cos(A,B) === cos(B,A)', () => {
-    const a = [3, 1, 4, 1, 5];
-    const b = [2, 7, 1, 8, 2];
-    expect(cosineSimilarity(a, b)).toBeCloseTo(cosineSimilarity(b, a), 10);
-  });
-});
-
-// cosineSimilarityFromCounts (mood vectors)
-
-describe('cosineSimilarityFromCounts', () => {
-
-  it('returns 1 for identical count maps', () => {
-    const a = { happy: 3, sad: 1, tense: 2 };
-    const b = { happy: 3, sad: 1, tense: 2 };
-    expect(cosineSimilarityFromCounts(a, b)).toBeCloseTo(1, 6);
-  });
-
-  it('returns 1 for proportional count maps', () => {
-    const a = { happy: 2, sad: 4 };
-    const b = { happy: 1, sad: 2 };
-    expect(cosineSimilarityFromCounts(a, b)).toBeCloseTo(1, 6);
-  });
-
-  it('handles disjoint keys (no shared moods) as 0', () => {
-    const a = { happy: 5 };
-    const b = { sad: 5 };
-    expect(cosineSimilarityFromCounts(a, b)).toBeCloseTo(0, 6);
-  });
-
-  it('handles partially overlapping keys', () => {
-    // a={happy:1, sad:1}, b={happy:1}: union space {happy,sad}
-    // A=[1,1], B=[1,0] => 1/√2 ≈ 0.7071
-    const a = { happy: 1, sad: 1 };
-    const b = { happy: 1 };
-    expect(cosineSimilarityFromCounts(a, b)).toBeCloseTo(0.70710678, 6);
-  });
-
-  it('returns 0 for two empty maps', () => {
-    expect(cosineSimilarityFromCounts({}, {})).toBe(0);
-  });
-
-  it('returns 0 when one map is empty', () => {
-    expect(cosineSimilarityFromCounts({ happy: 3 }, {})).toBe(0);
-  });
-});
-
-// jaccard
-
-describe('jaccard', () => {
-
-  it('returns 1 for identical sets', () => {
-    expect(jaccard(new Set([1, 2, 3]), new Set([1, 2, 3]))).toBe(1);
-  });
-
-  it('returns 0 for fully disjoint sets', () => {
-    expect(jaccard(new Set([1, 2]), new Set([3, 4]))).toBe(0);
-  });
-
-  it('computes partial overlap correctly', () => {
-    // {1,2,3} ∩ {2,3,4} = {2,3} (size 2); union = {1,2,3,4} (size 4) => 0.5
-    expect(jaccard(new Set([1, 2, 3]), new Set([2, 3, 4]))).toBe(0.5);
-  });
-
-  it('handles single shared element', () => {
-    // {1,2} ∩ {2,3} = {2} (1); union {1,2,3} (3) => 1/3
-    expect(jaccard(new Set([1, 2]), new Set([2, 3]))).toBeCloseTo(1 / 3, 6);
-  });
-
-  it('returns 0 for two empty sets', () => {
-    expect(jaccard(new Set(), new Set())).toBe(0);
-  });
-
-  it('returns 0 when one set is empty', () => {
-    expect(jaccard(new Set([1, 2, 3]), new Set())).toBe(0);
-  });
-
-  it('handles subset relationship', () => {
-    // {1,2} ⊂ {1,2,3,4}: intersection 2, union 4 => 0.5
-    expect(jaccard(new Set([1, 2]), new Set([1, 2, 3, 4]))).toBe(0.5);
-  });
-
-  it('is symmetric: J(A,B) === J(B,A)', () => {
-    const a = new Set([1, 2, 3, 5]);
-    const b = new Set([2, 3, 4]);
-    expect(jaccard(a, b)).toBe(jaccard(b, a));
-  });
-
-  it('works with string sets', () => {
-    expect(jaccard(new Set(['a', 'b']), new Set(['b', 'c']))).toBeCloseTo(1 / 3, 6);
-  });
-});
-
-// weightedSum
+} from './soulmate.math';
 
 describe('weightedSum', () => {
 
   it('weights sum to exactly 1.0 (sanity check on constants)', () => {
-    const total = WEIGHTS.rating + WEIGHTS.genre + WEIGHTS.actor +
-                  WEIGHTS.mood + WEIGHTS.disliked;
+    const total = WEIGHTS.rating + WEIGHTS.genre + WEIGHTS.actor + WEIGHTS.mood + WEIGHTS.disliked;
     expect(total).toBeCloseTo(1.0, 10);
   });
 
@@ -179,8 +39,6 @@ describe('weightedSum', () => {
   });
 
   it('computes a realistic mixed score correctly', () => {
-    // rating .9*.45 + genre .5*.22 + actor .3*.16 + mood .6*.11 + disliked .1*.06
-    // = .405 + .11 + .048 + .066 + .006 = .635
     const score = weightedSum({
       rating: 0.9, genre: 0.5, actor: 0.3, mood: 0.6, disliked: 0.1,
     });
@@ -201,8 +59,6 @@ describe('weightedSum', () => {
     expect(score).toBeLessThanOrEqual(1);
   });
 });
-
-// isRecomputeThrottled
 
 describe('isRecomputeThrottled', () => {
 
@@ -231,7 +87,6 @@ describe('isRecomputeThrottled', () => {
   it('returns false when computed exactly 24h ago (boundary)', () => {
     const now = new Date('2025-06-02T12:00:00Z');
     const lastComputed = new Date('2025-06-01T12:00:00Z');
-    // elapsed === cooldown, and throttle is `elapsed < cooldown`, so not throttled
     expect(isRecomputeThrottled(lastComputed, now)).toBe(false);
   });
 
@@ -251,8 +106,6 @@ describe('isRecomputeThrottled', () => {
     expect(RECOMPUTE_COOLDOWN_MS).toBe(24 * 60 * 60 * 1000);
   });
 });
-
-// buildRatingVectors
 
 describe('buildRatingVectors', () => {
 

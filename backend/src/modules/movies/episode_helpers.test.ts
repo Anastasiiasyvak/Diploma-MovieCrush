@@ -1,4 +1,4 @@
-import { buildAllEpisodesList } from '../modules/movies/episode.helpers';
+import { buildAllEpisodesList } from './episode.helpers';
 
 describe('buildAllEpisodesList', () => {
 
@@ -52,7 +52,8 @@ describe('buildAllEpisodesList', () => {
     expect(result).toHaveLength(30);
   });
 
-  it('ignores undefined seasons array safely', () => {
-    expect(buildAllEpisodesList(undefined)).toEqual([]);
-  });
+  it('returns empty array when TMDB omits seasons (boundary guard)', () => {
+      const seasonsFromTmdb: { season_number: number; episode_count: number }[] | undefined = undefined;
+      expect(buildAllEpisodesList(seasonsFromTmdb ?? [])).toEqual([]);
+    });
 });

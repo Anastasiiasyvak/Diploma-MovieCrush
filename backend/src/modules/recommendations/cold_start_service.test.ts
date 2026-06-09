@@ -9,7 +9,7 @@ import {
   type ColdStartItem,
   type OnboardingMovie,
   type ContentBucket,
-} from '../modules/recommendations/cold_start_service';
+} from './cold_start_service';
 
 const movie = (tmdb_id: number, genre: string): OnboardingMovie =>
   ({ tmdb_id, genre, media_type: 'movie' });
@@ -33,7 +33,6 @@ const makeItems = (count: number, startId = 0): ColdStartItem[] =>
 const tmdbResult = (overrides: { original_language?: string; genre_ids?: number[] } = {}) =>
   ({ id: 1, ...overrides }) as any;
 
-// getContentBucket
 
 describe('getContentBucket', () => {
   it('regular drama movie -> movie', () => {
@@ -66,7 +65,6 @@ describe('getContentBucket', () => {
   });
 });
 
-// computeGenreWeights (rating < 6 не враховується)
 
 describe('computeGenreWeights', () => {
   it('movie without rating -> weight 1', () => {
@@ -166,7 +164,6 @@ describe('getLowRatedIds', () => {
   });
 });
 
-// getTopGenreIds
 
 describe('getTopGenreIds', () => {
   it('returns top N sorted by weight', () => {
@@ -183,7 +180,6 @@ describe('getTopGenreIds', () => {
   });
 });
 
-// passesLanguageGenreFilter
 
 describe('passesLanguageGenreFilter', () => {
   const movieTv: Set<ContentBucket> = new Set(['movie', 'tv']);
@@ -229,7 +225,6 @@ describe('passesLanguageGenreFilter', () => {
   });
 });
 
-// buildBatch
 
 describe('buildBatch', () => {
   it('returns exactly 25 when enough items', () => {

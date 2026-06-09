@@ -7,6 +7,7 @@ import { POSTER_SIZES } from '../../../constants/tmdb';
 import { followsService } from '../../../services/followsService';
 import { movieService } from '../../../services/movieService';
 import { styles, GRID_CONFIG } from './PublicListGrid.styles';
+import { MediaType } from '../../../types/tmdb.types';
 
 interface MediaMeta {
   tmdb_id: number;
@@ -14,14 +15,14 @@ interface MediaMeta {
   poster_path: string | null;
   release_date: string;
   vote_average: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
 }
 
 interface Props {
   userId: number;
   listId: number | null;
   listType: string;
-  onItemPress: (tmdbId: number, mediaType: 'movie' | 'tv') => void;
+  onItemPress: (tmdbId: number, mediaType: MediaType) => void;
 }
 
 export const PublicListGrid: React.FC<Props> = ({ userId, listId, listType, onItemPress }) => {
@@ -43,7 +44,7 @@ export const PublicListGrid: React.FC<Props> = ({ userId, listId, listType, onIt
       const batch = await movieService.getBatchDetails(
         sliced.map(i => ({
           tmdb_id: i.tmdb_id,
-          media_type: (i.media_type as 'movie' | 'tv') ?? 'movie',
+          media_type: (i.media_type as MediaType) ?? 'movie',
         })),
       );
 

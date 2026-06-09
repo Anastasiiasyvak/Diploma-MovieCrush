@@ -12,7 +12,7 @@ export interface EpisodeWatchInput {
 }
 
 interface TmdbSeriesDetails {
-  seasons: SeasonSummary[];
+  seasons?: SeasonSummary[];
 }
 
 export const getWatchedEpisodes = async (
@@ -133,19 +133,26 @@ export const markAllEpisodesWatched = async (
   userId: number, seriesTmdbId: number
 ): Promise<{ episodes_added: number; episodes_watched_count: number }> => {
   const details = await fetchFromTMDB<TmdbSeriesDetails>(`/tv/${seriesTmdbId}`);
-  const allEpisodes = buildAllEpisodesList(details.seasons);
+  const allEpisodes = buildAllEpisodesList(details.seasons ?? []);
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    for (const { season, episode } of allEpisodes) {
+    if (allEpisodes.length > 0) {
+      const values: number[] = [];
+      const rows = allEpisodes.map(({ season, episode }, i) => {
+        const offset = i * 4;
+        values.push(userId, seriesTmdbId, season, episode);
+        return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4})`;
+      });
+
       await client.query(
         `INSERT INTO user_episode_watches
            (user_id, series_tmdb_id, season_number, episode_number)
-         VALUES ($1, $2, $3, $4)
+         VALUES ${rows.join(', ')}
          ON CONFLICT DO NOTHING`,
-        [userId, seriesTmdbId, season, episode]
+        values
       );
     }
 

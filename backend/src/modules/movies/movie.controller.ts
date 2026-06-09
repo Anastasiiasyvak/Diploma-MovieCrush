@@ -116,15 +116,17 @@ export const getMyRating = async (req: AuthRequest, res: Response) => {
 
 export const saveRating = async (req: AuthRequest, res: Response) => {
   try {
-    const { tmdb_id, overall_rating, director_score, effects_score, script_score, music_score, acting_score, media_type } = req.body;
+    const { tmdb_id, overall_rating, director_score, effects_score, script_score, music_score, acting_score, media_type, is_episode } = req.body;
     if (!tmdb_id) { res.status(400).json({ error: 'tmdb_id required' }); return; }
     const data = await upsertRating(req.userId!, {
-      tmdb_id, overall_rating, director_score, effects_score, script_score, music_score, acting_score,
+      tmdb_id, overall_rating, director_score, effects_score, script_score, music_score, acting_score, is_episode,
     });
 
-    cacheMediaIfNeeded(tmdb_id, media_type ?? 'movie').catch((err) => {
-      console.error('cacheMediaIfNeeded failed for', tmdb_id, media_type ?? 'movie', err);
-    });
+    if (!is_episode) {
+      cacheMediaIfNeeded(tmdb_id, media_type ?? 'movie').catch((err) => {
+        console.error('cacheMediaIfNeeded failed for', tmdb_id, media_type ?? 'movie', err);
+      });
+    }
 
     res.json(data);
   } catch (err) {

@@ -1,3 +1,4 @@
+import { MediaType } from '../types/tmdb.types';
 import api from './api';
 
 export interface OnboardingActor {
@@ -16,7 +17,7 @@ export interface OnboardingMovie {
   year: number;
   genre: string;
   batch: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
 }
 
 export interface OnboardingContent {

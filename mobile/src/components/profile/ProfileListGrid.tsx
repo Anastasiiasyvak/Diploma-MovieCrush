@@ -8,6 +8,7 @@ import { FONTS } from '../../constants/fonts';
 import { POSTER_SIZES } from '../../constants/tmdb';
 import { CustomAlert } from '../ui/CustomAlert';
 import { movieService } from '../../services/movieService';
+import { MediaType } from '../../types/tmdb.types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAX_WIDTH = 480;
@@ -24,13 +25,13 @@ interface MediaMeta {
   poster_path: string | null;
   release_date: string;
   vote_average: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
 }
 
 interface Props {
   listId: number | null;
   listType: string;
-  onItemPress: (tmdbId: number, mediaType: 'movie' | 'tv') => void;
+  onItemPress: (tmdbId: number, mediaType: MediaType) => void;
   onRemoved?: (tmdbId: number, listType: string) => void;
 }
 
@@ -57,7 +58,7 @@ export const ProfileListGrid: React.FC<Props> = ({ listId, listType, onItemPress
       const batch = await movieService.getBatchDetails(
         sliced.map(i => ({
           tmdb_id: i.tmdb_id,
-          media_type: (i.media_type as 'movie' | 'tv') ?? 'movie',
+          media_type: (i.media_type as MediaType) ?? 'movie',
         })),
       );
 
