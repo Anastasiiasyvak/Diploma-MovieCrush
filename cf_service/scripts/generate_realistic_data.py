@@ -294,7 +294,7 @@ if __name__ == "__main__":
 
     confirm = input("\n Old points will be deleted. Continue? (yes/no): ")
     if confirm.lower() != "yes":
-        print("Super")
+        print("Cancelled")
         conn.close()
         exit()
 

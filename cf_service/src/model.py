@@ -18,6 +18,8 @@ MODEL_PATH = os.path.join(ARTIFACTS_DIR, "implicit_model.pkl")
 MAPPINGS_PATH = os.path.join(ARTIFACTS_DIR, "implicit_mappings.pkl")
 MATRIX_PATH = os.path.join(ARTIFACTS_DIR, "implicit_matrix.pkl")
 
+_cached_model = None
+
 def build_matrix():
     log.info("Fetching interactions...")
     interactions = fetch_all("""
@@ -120,9 +122,6 @@ def load_model():
         matrix = pickle.load(f)
 
     return model, user_to_idx, item_to_idx, idx_to_item, matrix
-
-_cached_model = None
-
 
 def get_cached_model():
     global _cached_model
