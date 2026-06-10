@@ -6,6 +6,7 @@ import {
   markAllEpisodesWatched,
 } from './episode.service';
 import { cacheMediaIfNeeded } from '../tmdb_cache/tmdb_cache.service';
+import logger from '../../config/logger';
 
 export const fetchWatchedEpisodes = async (req: AuthRequest, res: Response) => {
   try {
@@ -14,7 +15,7 @@ export const fetchWatchedEpisodes = async (req: AuthRequest, res: Response) => {
     const episodes = await getWatchedEpisodes(req.userId!, seriesTmdbId);
     res.json({ episodes });
   } catch (err) {
-    console.error('fetchWatchedEpisodes error:', err);
+    logger.error({ err }, 'fetchWatchedEpisodes failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -37,12 +38,12 @@ export const toggleEpisode = async (req: AuthRequest, res: Response) => {
     });
 
     cacheMediaIfNeeded(series_tmdb_id, 'tv').catch((err) => {
-      console.error('cacheMediaIfNeeded failed for series', series_tmdb_id, err);
+      logger.error({ err, seriesTmdbId: series_tmdb_id }, 'cacheMediaIfNeeded failed for series');
     });
 
     res.json(result);
   } catch (err) {
-    console.error('toggleEpisode error:', err);
+    logger.error({ err }, 'toggleEpisode failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -58,12 +59,12 @@ export const markAllEpisodes = async (req: AuthRequest, res: Response) => {
     const result = await markAllEpisodesWatched(req.userId!, series_tmdb_id);
 
     cacheMediaIfNeeded(series_tmdb_id, 'tv').catch((err) => {
-      console.error('cacheMediaIfNeeded failed for series', series_tmdb_id, err);
+      logger.error({ err, seriesTmdbId: series_tmdb_id }, 'cacheMediaIfNeeded failed for series');
     });
 
     res.json(result);
   } catch (err) {
-    console.error('markAllEpisodes error:', err);
+    logger.error({ err }, 'markAllEpisodes failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };

@@ -3,6 +3,7 @@ import { AuthRequest } from '../../middleware/auth.middleware';
 import { getColdStartRecommendations } from './cold_start_service';
 import { getPersonalizedRecommendations } from './als_service';
 import pool from '../../config/database';
+import logger from '../../config/logger';
 
 const PERSONALIZED_THRESHOLD = 25;
 
@@ -30,12 +31,12 @@ export const getRecommendations = async (req: AuthRequest, res: Response) => {
       const data = await getPersonalizedRecommendations(userId);
       res.json(data);
     } catch (err: any) {
-      console.warn(`[Recs] Personalized failed for user ${userId}, falling back to cold start:`, err?.message);
+      logger.warn({ err, userId }, 'Personalized recommendations failed, falling back to cold start');
       const fallback = await getColdStartRecommendations(userId, seed);
       res.json(fallback);
     }
   } catch (err: any) {
-    console.error('getRecommendations error:', err);
+    logger.error({ err }, 'getRecommendations failed');
     res.status(500).json({ error: err?.message || 'Internal server error' });
   }
 };

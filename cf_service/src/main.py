@@ -1,18 +1,21 @@
 from fastapi import FastAPI, HTTPException
 from contextlib import asynccontextmanager
 from model import get_recommendations, train_model, get_cached_model
+from logging_config import get_logger
 import uvicorn
+
+log = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("Loading ALS model...", flush=True)
+    log.info("Loading ALS model...")
     try:
         model, user_to_idx, item_to_idx, idx_to_item, matrix = get_cached_model()
-        print(f"Model ready! Users: {len(user_to_idx)}, Items: {len(item_to_idx)}", flush=True)
-        print(f"Matrix shape: {matrix.shape}", flush=True)
+        log.info(f"Model ready! Users: {len(user_to_idx)}, Items: {len(item_to_idx)}")
+        log.info(f"Matrix shape: {matrix.shape}")
     except Exception as e:
-        print(f"Warning: Could not load model: {e}", flush=True)
-        print("Will train on first request or /train endpoint", flush=True)
+        log.warning(f"Could not load model: {e}")
+        log.warning("Will train on first request or /train endpoint")
     yield
 
 app = FastAPI(title="MovieCrush ALS Service", lifespan=lifespan)
@@ -47,7 +50,7 @@ def recommend(user_id: int, n: int = 40):
             "count": len(tmdb_ids)
         }
     except Exception as e:
-        print(f"Error in recommend endpoint: {e}", flush=True)
+        log.exception("Error in recommend endpoint")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/info")

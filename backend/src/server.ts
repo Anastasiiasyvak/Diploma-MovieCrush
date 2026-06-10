@@ -1,6 +1,7 @@
 import app from './app';
 import dotenv from 'dotenv';
 import pool from './config/database';
+import logger from './config/logger';
 
 dotenv.config();
 
@@ -10,10 +11,10 @@ const start = async () => {
   try {
     await pool.query('SELECT NOW()');
     app.listen(PORT, () => {
-      console.log(`MovieCrush server running on port ${PORT}`);
+      logger.info({ port: PORT }, 'MovieCrush server running');
     });
   } catch (err) {
-    console.error('Failed to connect to database:', err);
+    logger.error({ err }, 'Failed to connect to database');
     process.exit(1);
   }
 };

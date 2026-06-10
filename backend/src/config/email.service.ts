@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import logger from './logger';
 
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 const FROM_EMAIL = 'MovieCrush <onboarding@resend.dev>';
@@ -8,7 +9,7 @@ let resendClient: Resend | null = null;
 const getResend = (): Resend | null => {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn('RESEND_API_KEY is not set — email sending is disabled.');
+    logger.warn('RESEND_API_KEY is not set - email sending is disabled.');
     return null;
   }
   if (!resendClient) {

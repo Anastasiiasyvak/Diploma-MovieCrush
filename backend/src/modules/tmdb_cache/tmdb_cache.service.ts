@@ -1,4 +1,5 @@
 import pool from '../../config/database';
+import logger from '../../config/logger';
 import { MediaType } from '../shared/user.types';
 import { fetchFromTMDB } from '../tmdb/tmdb.service';
 
@@ -86,7 +87,7 @@ export const cacheMediaIfNeeded = async (
 
     }
   } catch (err) {
-    console.error(`cacheMediaIfNeeded(${tmdbId}, ${mediaType}) failed:`, err);
+    logger.error({ err, tmdbId, mediaType }, 'cacheMediaIfNeeded failed');
   }
 };
 

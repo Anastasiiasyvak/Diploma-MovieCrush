@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.middleware';
 import { computeSoulmateForUser, getMyMatch } from './soulmate.service';
 import { SoulmateResponse } from './soulmate.types';
+import logger from '../../config/logger';
 
 const formatResponse = (row: any): SoulmateResponse => {
   const score = Number(row.similarity_score);
@@ -46,7 +47,7 @@ export const getMyCurrentMatch = async (req: AuthRequest, res: Response) => {
 
     res.json(formatResponse(row));
   } catch (err) {
-    console.error('getMyCurrentMatch error:', err);
+    logger.error({ err, userId: req.userId }, 'getMyCurrentMatch failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -84,7 +85,7 @@ export const recomputeMyMatch = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    console.error('recomputeMyMatch error:', err);
+    logger.error({ err, userId: req.userId }, 'recomputeMyMatch failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };

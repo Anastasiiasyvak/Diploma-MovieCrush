@@ -1,7 +1,9 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import pinoHttp from 'pino-http';
+import logger from './config/logger';
 
 import authRoutes     from './modules/auth/auth.routes';
 import profileRoutes  from './modules/profile/profile.routes';
@@ -17,6 +19,18 @@ import wrappedRoutes from './modules/wrapped/wrapped.routes';
 
 
 const app = express();
+
+app.use(pinoHttp({
+  logger,
+  serializers: {
+    req(req) {
+      return { id: req.id, method: req.method, url: req.url };
+    },
+    res(res) {
+      return { statusCode: res.statusCode };
+    },
+  },
+}));
 
 app.use(helmet());
 app.use(cors());
@@ -49,5 +63,9 @@ app.use('/api/recommendations', recommendationsRoutes);
 app.use('/api/onboarding', onboardingRoutes);
 app.use('/api/wrapped', wrappedRoutes);
 
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  logger.error({ err, method: req.method, url: req.originalUrl }, 'Unhandled request error');
+  res.status(500).json({ error: 'Internal server error' });
+});
 
 export default app;

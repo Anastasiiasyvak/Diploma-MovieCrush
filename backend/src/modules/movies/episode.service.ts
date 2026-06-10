@@ -1,6 +1,7 @@
 import pool from '../../config/database';
 import { fetchFromTMDB } from '../tmdb/tmdb.service';
 import { buildAllEpisodesList, SeasonSummary } from './episode.helpers';
+import logger from '../../config/logger';
 
 export interface EpisodeWatchInput {
   series_tmdb_id: number;
@@ -122,7 +123,7 @@ export const toggleEpisodeWatch = async (
     return { is_watched, episodes_watched_count };
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('toggleEpisodeWatch failed for user', userId, 'series', series_tmdb_id, error);
+    logger.error({ err: error, userId, seriesTmdbId: series_tmdb_id }, 'toggleEpisodeWatch failed');
     throw error;
   } finally {
     client.release();
@@ -172,7 +173,7 @@ export const markAllEpisodesWatched = async (
     };
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('markAllEpisodesWatched failed for user', userId, 'series', seriesTmdbId, error);
+    logger.error({ err: error, userId, seriesTmdbId }, 'markAllEpisodesWatched failed');
     throw error;
   } finally {
     client.release();

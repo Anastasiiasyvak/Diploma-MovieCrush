@@ -23,6 +23,7 @@ import {
   validateEmail,
   validateUsername,
 } from './auth.validators';
+import logger from '../../config/logger';
 
 
 const generateTokens = (userId: number, uuid: string) => {
@@ -79,7 +80,7 @@ export const register = async (req: Request, res: Response) => {
     if (err.message === 'Username already exists') {
       res.status(409).json({ error: 'This username is already taken', field: 'username' }); return;
     }
-    console.error('Register error:', err);
+    logger.error({ err }, 'register failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -94,7 +95,7 @@ export const verifyEmailHandler = async (req: Request, res: Response) => {
 
     res.status(200).send(verifySuccessPage);
   } catch (err) {
-    console.error('Verify email error:', err);
+    logger.error({ err }, 'verifyEmail failed');
     res.status(500).send(verifyErrorPage);
   }
 };
@@ -114,7 +115,7 @@ export const checkVerified = async (req: Request, res: Response) => {
       res.status(200).json({ verified: false });
     }
   } catch (err) {
-    console.error('Check verified error:', err);
+    logger.error({ err }, 'checkVerified failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -132,7 +133,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
       message: 'If this email exists, you will receive a password reset link shortly.',
     });
   } catch (err) {
-    console.error('Forgot password error:', err);
+    logger.error({ err }, 'forgotPassword failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -143,6 +144,7 @@ export const resetPasswordPage = async (req: Request, res: Response) => {
     if (!token) { res.status(400).send(verifyErrorPage); return; }
     res.status(200).send(resetPasswordForm(token));
   } catch (err) {
+    logger.error({ err }, 'resetPasswordPage failed');
     res.status(500).send(verifyErrorPage);
   }
 };
@@ -172,7 +174,7 @@ export const resetPasswordHandler = async (req: Request, res: Response) => {
 
     res.status(200).send(resetSuccessPage);
   } catch (err) {
-    console.error('Reset password error:', err);
+    logger.error({ err }, 'resetPassword failed');
     res.status(500).send(resetPasswordForm(req.params.token as string, 'Something went wrong. Please try again.'));
   }
 };
@@ -205,7 +207,7 @@ export const login = async (req: Request, res: Response) => {
     if (err.message === 'Account is banned') {
       res.status(403).json({ error: 'Your account has been suspended' }); return;
     }
-    console.error('Login error:', err);
+    logger.error({ err }, 'login failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -239,6 +241,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
     const { password_hash, ...userWithoutPassword } = user;
     res.status(200).json({ user: userWithoutPassword });
   } catch (err) {
+    logger.error({ err, userId: req.userId }, 'getMe failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };

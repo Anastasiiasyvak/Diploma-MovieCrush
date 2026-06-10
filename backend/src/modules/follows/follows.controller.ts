@@ -8,6 +8,7 @@ import {
   getFollowingRatingsForMedia,
   FollowError, FOLLOW_ERROR_CODES,
 } from './follows.service';
+import logger from '../../config/logger';
 
 const parseUserId = (raw: string): number | null => {
   const n = parseInt(raw, 10);
@@ -33,7 +34,7 @@ export const follow = async (req: AuthRequest, res: Response) => {
           res.status(400).json({ error: err.message }); return;
       }
     }
-    console.error('follow error:', err);
+    logger.error({ err, userId: req.userId }, 'follow failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -47,7 +48,7 @@ export const unfollow = async (req: AuthRequest, res: Response) => {
     const counts = await unfollowUser(req.userId!, targetId);
     res.json(counts);
   } catch (err) {
-    console.error('unfollow error:', err);
+    logger.error({ err, userId: req.userId }, 'unfollow failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -57,7 +58,7 @@ export const getMyFollowers = async (req: AuthRequest, res: Response) => {
     const users = await getFollowers(req.userId!, req.userId!);
     res.json({ users });
   } catch (err) {
-    console.error('getMyFollowers error:', err);
+    logger.error({ err, userId: req.userId }, 'getMyFollowers failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -67,7 +68,7 @@ export const getMyFollowing = async (req: AuthRequest, res: Response) => {
     const users = await getFollowing(req.userId!, req.userId!);
     res.json({ users });
   } catch (err) {
-    console.error('getMyFollowing error:', err);
+    logger.error({ err, userId: req.userId }, 'getMyFollowing failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -77,7 +78,7 @@ export const getMyFriends = async (req: AuthRequest, res: Response) => {
     const users = await getFriends(req.userId!, req.userId!);
     res.json({ users });
   } catch (err) {
-    console.error('getMyFriends error:', err);
+    logger.error({ err, userId: req.userId }, 'getMyFriends failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -87,7 +88,7 @@ export const getMyFollowCounts = async (req: AuthRequest, res: Response) => {
     const counts = await getMyCounts(req.userId!);
     res.json(counts);
   } catch (err) {
-    console.error('getMyFollowCounts error:', err);
+    logger.error({ err, userId: req.userId }, 'getMyFollowCounts failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -100,7 +101,7 @@ export const getUserFollowers = async (req: AuthRequest, res: Response) => {
     const users = await getFollowers(targetId, req.userId!);
     res.json({ users });
   } catch (err) {
-    console.error('getUserFollowers error:', err);
+    logger.error({ err, userId: req.userId }, 'getUserFollowers failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -113,7 +114,7 @@ export const getUserFollowing = async (req: AuthRequest, res: Response) => {
     const users = await getFollowing(targetId, req.userId!);
     res.json({ users });
   } catch (err) {
-    console.error('getUserFollowing error:', err);
+    logger.error({ err, userId: req.userId }, 'getUserFollowing failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -126,7 +127,7 @@ export const getUserFriends = async (req: AuthRequest, res: Response) => {
     const users = await getFriends(targetId, req.userId!);
     res.json({ users });
   } catch (err) {
-    console.error('getUserFriends error:', err);
+    logger.error({ err, userId: req.userId }, 'getUserFriends failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -141,7 +142,7 @@ export const getUserProfile = async (req: AuthRequest, res: Response) => {
 
     res.json(profile);
   } catch (err) {
-    console.error('getUserProfile error:', err);
+    logger.error({ err, userId: req.userId }, 'getUserProfile failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -154,7 +155,7 @@ export const getStatus = async (req: AuthRequest, res: Response) => {
     const status = await getFollowStatus(req.userId!, targetId);
     res.json(status);
   } catch (err) {
-    console.error('getStatus error:', err);
+    logger.error({ err, userId: req.userId }, 'getStatus failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -168,7 +169,7 @@ export const search = async (req: AuthRequest, res: Response) => {
     const users = await searchUsers(req.userId!, query);
     res.json({ users });
   } catch (err) {
-    console.error('search users error:', err);
+    logger.error({ err, userId: req.userId }, 'searchUsers failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -184,7 +185,7 @@ export const getLists = async (req: AuthRequest, res: Response) => {
     if (err instanceof FollowError && err.code === FOLLOW_ERROR_CODES.USER_NOT_FOUND) {
       res.status(404).json({ error: err.message }); return;
     }
-    console.error('getLists error:', err);
+    logger.error({ err, userId: req.userId }, 'getLists failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -201,7 +202,7 @@ export const getListItems = async (req: AuthRequest, res: Response) => {
     if (err instanceof FollowError && err.code === FOLLOW_ERROR_CODES.LIST_NOT_FOUND) {
       res.status(404).json({ error: err.message }); return;
     }
-    console.error('getListItems error:', err);
+    logger.error({ err, userId: req.userId }, 'getListItems failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -215,7 +216,7 @@ export const getRatings = async (req: AuthRequest, res: Response) => {
     const ratings = await getFollowingRatingsForMedia(req.userId!, tmdbId);
     res.json({ ratings });
   } catch (err) {
-    console.error('getRatings error:', err);
+    logger.error({ err, userId: req.userId }, 'getRatings failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };

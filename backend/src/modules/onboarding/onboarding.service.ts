@@ -5,6 +5,7 @@ import {
   OnboardingContent,
   CompleteOnboardingPayload,
 } from './onboarding.types';
+import logger from '../../config/logger';
 
 
 export const getOnboardingContent = async (batch = 1): Promise<OnboardingContent> => {
@@ -118,7 +119,7 @@ export const completeOnboarding = async (
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('completeOnboarding failed for user', userId, error);
+    logger.error({ err: error, userId }, 'completeOnboarding failed');
     throw error;
   } finally {
     client.release();

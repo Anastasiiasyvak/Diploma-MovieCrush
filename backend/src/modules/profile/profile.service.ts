@@ -1,6 +1,7 @@
 import pool from '../../config/database';
 import { ProfileResponse, UpdateProfileInput } from './profile.types';
 import { User } from '../shared/user.types';
+import logger from '../../config/logger';
 
 const DEFAULT_LISTS = [
   { list_type: 'watched', name: 'Watched'   },
@@ -39,7 +40,7 @@ export const getUserProfile = async (userId: number): Promise<ProfileResponse | 
 
   if (Number(defaultListsCheck.rows[0].cnt) < 3) {
     await ensureDefaultLists(userId);
-    console.log(`Auto-restored default lists for user ${userId}`);
+    logger.info({ userId }, 'Auto-restored default lists for user');
   }
 
   const listsResult = await pool.query(

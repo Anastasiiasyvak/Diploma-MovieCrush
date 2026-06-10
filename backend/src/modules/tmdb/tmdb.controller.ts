@@ -4,10 +4,11 @@ import { fetchFromTMDB } from './tmdb.service';
 import pool from '../../config/database';
 import { cacheMediaIfNeeded } from '../tmdb_cache/tmdb_cache.service';
 import { parseTmdbId } from './tmdb.helpers';
+import logger from '../../config/logger';
 
 // тут обробник помилок проксі
 const handleError = (res: Response, err: unknown, context: string) => {
-  console.error(`TMDB proxy error (${context}):`, err);
+  logger.error({ err, context }, 'TMDB proxy error');
   res.status(502).json({ error: 'Failed to fetch from TMDB' });
 };
 
@@ -259,9 +260,15 @@ export const getMediaBatch = async (req: Request, res: Response): Promise<void> 
 
     const items: BatchItem[] = [];
     for (const raw of rawItems.slice(0, MAX_BATCH_SIZE)) {
-      if (!raw || (raw.media_type !== 'movie' && raw.media_type !== 'tv')) continue;
+      if (!raw || (raw.media_type !== 'movie' && raw.media_type !== 'tv')) {
+        logger.warn({ raw }, 'getMediaBatch: skipping item with invalid media_type');
+        continue;
+      }
       const tmdbId = parseTmdbId(raw.tmdb_id);
-      if (tmdbId === null) continue;
+      if (tmdbId === null) {
+        logger.warn({ raw }, 'getMediaBatch: skipping item with unparseable tmdb_id');
+        continue;
+      }
       items.push({ tmdb_id: tmdbId, media_type: raw.media_type });
     }
 

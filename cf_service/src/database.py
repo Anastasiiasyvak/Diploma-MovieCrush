@@ -3,8 +3,11 @@ import psycopg2.extras
 from psycopg2 import pool as pg_pool
 import os
 from dotenv import load_dotenv
+from logging_config import get_logger
 
 load_dotenv()
+
+log = get_logger(__name__)
 
 _pool = None
 
@@ -33,8 +36,8 @@ def fetch_all(query: str, params=None):
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(query, params)
             return cur.fetchall()
-    except Exception as e:
-        print(f"Database error: {e}", flush=True)
+    except Exception:
+        log.exception("Database error")
         raise
     finally:
         pool.putconn(conn)

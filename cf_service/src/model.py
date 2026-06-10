@@ -5,6 +5,9 @@ import scipy.sparse as sp
 from implicit.als import AlternatingLeastSquares
 from implicit.nearest_neighbours import bm25_weight
 from database import fetch_all
+from logging_config import get_logger
+
+log = get_logger(__name__)
 
 _SRC_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(_SRC_DIR)
@@ -16,7 +19,7 @@ MAPPINGS_PATH = os.path.join(ARTIFACTS_DIR, "implicit_mappings.pkl")
 MATRIX_PATH = os.path.join(ARTIFACTS_DIR, "implicit_matrix.pkl")
 
 def build_matrix():
-    print("Fetching interactions...", flush=True)
+    log.info("Fetching interactions...")
     interactions = fetch_all("""
         SELECT uma.user_id, uma.tmdb_id,
                COALESCE(udr.overall_rating, 0) as rating,
@@ -62,21 +65,21 @@ def build_matrix():
         shape=(len(users), len(items))
     )
 
-    print(f"Matrix shape: {matrix.shape}", flush=True)
-    print(f"Sparsity: {1 - matrix.nnz / (matrix.shape[0] * matrix.shape[1]):.2%}", flush=True)
-    print(f"Total interactions: {matrix.nnz}", flush=True)
+    log.info(f"Matrix shape: {matrix.shape}")
+    log.info(f"Sparsity: {1 - matrix.nnz / (matrix.shape[0] * matrix.shape[1]):.2%}")
+    log.info(f"Total interactions: {matrix.nnz}")
     
     return matrix, user_to_idx, item_to_idx, idx_to_item
 
 
 def train_model():
-    print("Building dataset...", flush=True)
+    log.info("Building dataset...")
     matrix, user_to_idx, item_to_idx, idx_to_item = build_matrix()
 
-    print("Applying BM25 weighting...", flush=True)
+    log.info("Applying BM25 weighting...")
     matrix_weighted = bm25_weight(matrix, K1=100, B=0.8).tocsr()
 
-    print("Training ALS model...", flush=True)
+    log.info("Training ALS model...")
     model = AlternatingLeastSquares(
         factors=24,           
         iterations=30,       
@@ -86,7 +89,7 @@ def train_model():
         use_gpu=False
     )
     model.fit(matrix_weighted)
-    print("Training done!", flush=True)
+    log.info("Training done!")
 
     with open(MODEL_PATH, "wb") as f:
         pickle.dump(model, f)
@@ -95,7 +98,7 @@ def train_model():
     with open(MATRIX_PATH, "wb") as f:
         pickle.dump(matrix, f)
 
-    print("Model saved!", flush=True)
+    log.info("Model saved!")
 
     global _cached_model
     _cached_model = (model, user_to_idx, item_to_idx, idx_to_item, matrix)
@@ -105,10 +108,10 @@ def train_model():
 
 def load_model():
     if not all(os.path.exists(p) for p in [MODEL_PATH, MAPPINGS_PATH, MATRIX_PATH]):
-        print("Model files not found, training new model...", flush=True)
+        log.info("Model files not found, training new model...")
         return train_model()
 
-    print("Loading existing model...", flush=True)
+    log.info("Loading existing model...")
     with open(MODEL_PATH, "rb") as f:
         model = pickle.load(f)
     with open(MAPPINGS_PATH, "rb") as f:
@@ -132,7 +135,7 @@ def get_recommendations(user_id: int, n: int = 40) -> list[int]:
     model, user_to_idx, item_to_idx, idx_to_item, matrix = get_cached_model()
 
     if user_id not in user_to_idx:
-        print(f"User {user_id} not found in training data", flush=True)
+        log.warning(f"User {user_id} not found in training data")
         return []
 
     user_idx = user_to_idx[user_id]

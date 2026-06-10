@@ -5,6 +5,7 @@ import {
   MoodInput, MoodType, CommentInput, CommentResponse,
   BestActorVoteInput,
 } from './movie.types';
+import logger from '../../config/logger';
 
 
 export const getMovieActions = async (
@@ -152,7 +153,7 @@ export const toggleMovieAction = async (
     return updated.rows[0];
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('toggleMovieAction failed for user', userId, 'tmdb', input.tmdb_id, error);
+    logger.error({ err: error, userId, tmdbId: input.tmdb_id }, 'toggleMovieAction failed');
     throw error;
   } finally {
     client.release();
@@ -246,7 +247,7 @@ export const removeFromCustomList = async (
     return { list_type };
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('removeFromCustomList failed for user', userId, 'list', listId, 'tmdb', tmdbId, error);
+    logger.error({ err: error, userId, listId, tmdbId }, 'removeFromCustomList failed');
     throw error;
   } finally {
     client.release();
@@ -332,7 +333,7 @@ export const upsertRating = async (
     return result.rows[0];
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('upsertRating failed for user', userId, 'tmdb', input.tmdb_id, error);
+    logger.error({ err: error, userId, tmdbId: input.tmdb_id }, 'upsertRating failed');
     throw error;
   } finally {
     client.release();
