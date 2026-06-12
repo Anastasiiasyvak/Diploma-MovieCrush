@@ -359,6 +359,21 @@ export const upsertMood = async (userId: number, input: MoodInput): Promise<Mood
   return result.rows[0].mood;
 };
 
+const attachAuthor = async (
+  userId: number,
+  comment: any
+): Promise<CommentResponse> => {
+  let username = null, profile_image_url = null;
+  if (!comment.is_anonymous) {
+    const user = await pool.query(
+      'SELECT username, profile_image_url FROM users WHERE id = $1', [userId]
+    );
+    username = user.rows[0]?.username ?? null;
+    profile_image_url = user.rows[0]?.profile_image_url ?? null;
+  }
+  return { ...comment, username, profile_image_url, my_reaction: null };
+};
+
 
 export const getComments = async (
   userId: number, tmdbId: number, page = 1
@@ -399,15 +414,7 @@ export const createComment = async (
       input.is_anonymous ?? false, input.has_spoiler ?? false]
   );
   const c = result.rows[0];
-  let username = null, profile_image_url = null;
-  if (!c.is_anonymous) {
-    const user = await pool.query(
-      'SELECT username, profile_image_url FROM users WHERE id = $1', [userId]
-    );
-    username = user.rows[0]?.username ?? null;
-    profile_image_url = user.rows[0]?.profile_image_url ?? null;
-  }
-  return { ...c, username, profile_image_url, my_reaction: null };
+  return attachAuthor(userId, c);
 };
 
 export const updateComment = async (
@@ -422,15 +429,7 @@ export const updateComment = async (
   );
   if (result.rows.length === 0) return null;
   const c = result.rows[0];
-  let username = null, profile_image_url = null;
-  if (!c.is_anonymous) {
-    const user = await pool.query(
-      'SELECT username, profile_image_url FROM users WHERE id = $1', [userId]
-    );
-    username = user.rows[0]?.username ?? null;
-    profile_image_url = user.rows[0]?.profile_image_url ?? null;
-  }
-  return { ...c, username, profile_image_url, my_reaction: null };
+  return attachAuthor(userId, c);
 };
 
 export const deleteComment = async (userId: number, commentId: number): Promise<boolean> => {
@@ -510,16 +509,29 @@ export const upsertBestActorVote = async (
 
 
 export const resetAllRatings = async (userId: number, tmdbId: number): Promise<void> => {
-  await pool.query(
-    `DELETE FROM user_detailed_ratings WHERE user_id = $1 AND tmdb_id = $2`,
-    [userId, tmdbId]
-  );
-  await pool.query(
-    `DELETE FROM user_movie_moods WHERE user_id = $1 AND tmdb_id = $2`,
-    [userId, tmdbId]
-  );
-  await pool.query(
-    `DELETE FROM user_best_actor_votes WHERE user_id = $1 AND tmdb_id = $2`,
-    [userId, tmdbId]
-  );
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    await client.query(
+      `DELETE FROM user_detailed_ratings WHERE user_id = $1 AND tmdb_id = $2`,
+      [userId, tmdbId]
+    );
+    await client.query(
+      `DELETE FROM user_movie_moods WHERE user_id = $1 AND tmdb_id = $2`,
+      [userId, tmdbId]
+    );
+    await client.query(
+      `DELETE FROM user_best_actor_votes WHERE user_id = $1 AND tmdb_id = $2`,
+      [userId, tmdbId]
+    );
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error({ err: error, userId, tmdbId }, 'resetAllRatings failed');
+    throw error;
+  } finally {
+    client.release();
+  }
 };

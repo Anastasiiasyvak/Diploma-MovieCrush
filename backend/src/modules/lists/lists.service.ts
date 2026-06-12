@@ -21,33 +21,60 @@ export const createCustomList = async (
   name: string,
   isPrivate: boolean = false
 ): Promise<UserList> => {
-  const result = await pool.query(
-    `INSERT INTO user_lists (user_id, list_type, name, is_private)
-     VALUES ($1, 'custom', $2, $3) RETURNING *`,
-    [userId, name.trim(), isPrivate]
-  );
-  await pool.query(
-    `UPDATE users SET custom_lists_count = custom_lists_count + 1 WHERE id = $1`,
-    [userId]
-  );
-  return result.rows[0];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      `INSERT INTO user_lists (user_id, list_type, name, is_private)
+       VALUES ($1, 'custom', $2, $3) RETURNING *`,
+      [userId, name.trim(), isPrivate]
+    );
+    await client.query(
+      `UPDATE users SET custom_lists_count = custom_lists_count + 1 WHERE id = $1`,
+      [userId]
+    );
+
+    await client.query('COMMIT');
+    return result.rows[0];
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 };
- 
+
 export const deleteCustomList = async (userId: number, listId: number): Promise<boolean> => {
-  const check = await pool.query(
-    `SELECT id FROM user_lists WHERE id = $1 AND user_id = $2 AND list_type = 'custom'`,
-    [listId, userId]
-  );
-  if (check.rows.length === 0) return false;
- 
-  await pool.query(`DELETE FROM user_lists WHERE id = $1`, [listId]);
-  await pool.query(
-    `UPDATE users SET custom_lists_count = GREATEST(0, custom_lists_count - 1) WHERE id = $1`,
-    [userId]
-  );
-  return true;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const check = await client.query(
+      `SELECT id FROM user_lists WHERE id = $1 AND user_id = $2 AND list_type = 'custom'`,
+      [listId, userId]
+    );
+    if (check.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return false;
+    }
+
+    await client.query(`DELETE FROM user_lists WHERE id = $1`, [listId]);
+    await client.query(
+      `UPDATE users SET custom_lists_count = GREATEST(0, custom_lists_count - 1) WHERE id = $1`,
+      [userId]
+    );
+
+    await client.query('COMMIT');
+    return true;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 };
- 
+
 export const toggleListPrivacy = async (
   userId: number,
   listId: number,

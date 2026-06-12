@@ -1,5 +1,8 @@
 import pool from '../../config/database';
-import { PublicUserProfile, UserListItem, FollowStatus, FollowCounts } from './follows.types';
+import {
+  PublicUserProfile, UserListItem, FollowStatus, FollowCounts,
+  PublicListSummary, FollowingRating,
+} from './follows.types';
 
 export class FollowError extends Error {
   public readonly code: string;
@@ -238,14 +241,6 @@ export const searchUsers = async (
   return result.rows;
 };
 
-export interface PublicListSummary {
-  id: number;
-  list_type: 'watched' | 'favorites' | 'watchlist' | 'custom';
-  name: string;
-  is_private: boolean;
-  items_count: number;
-}
-
 export const getUserLists = async (targetUserId: number): Promise<PublicListSummary[]> => {
   const userCheck = await pool.query(
     `SELECT id FROM users WHERE id = $1 AND account_status = 'active'`,
@@ -287,14 +282,6 @@ export const getUserListItems = async (
   );
   return result.rows;
 };
-
-export interface FollowingRating {
-  user_id: number;
-  username: string;
-  profile_image_url: string | null;
-  overall_rating: number;   
-  rated_at: Date;
-}
 
 export const getFollowingRatingsForMedia = async (
   viewerId: number, tmdbId: number

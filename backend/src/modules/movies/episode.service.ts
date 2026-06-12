@@ -1,16 +1,8 @@
 import pool from '../../config/database';
 import { fetchFromTMDB } from '../tmdb/tmdb.service';
 import { buildAllEpisodesList, SeasonSummary } from './episode.helpers';
+import { EpisodeWatchInput } from './episode.types';
 import logger from '../../config/logger';
-
-export interface EpisodeWatchInput {
-  series_tmdb_id: number;
-  season_number: number;
-  episode_number: number;
-  episode_tmdb_id?: number;
-  total_episodes_in_series?: number;
-  total_seasons_in_series?: number;
-}
 
 interface TmdbSeriesDetails {
   seasons?: SeasonSummary[];

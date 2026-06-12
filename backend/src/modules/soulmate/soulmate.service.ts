@@ -166,7 +166,6 @@ export const computeHybridSimilarity = async (
     genre_similarity: genre,
     actor_similarity: actor,
     mood_similarity: mood,
-    director_similarity: 0,
     disliked_similarity: disliked.similarity,
     sharedMovies: rating.sharedMovies,
     sharedDisliked: disliked.sharedDisliked,
@@ -243,14 +242,14 @@ export const computeSoulmateForUser = async (
        user_id, matched_user_id, wrapped_year,
        similarity_score,
        rating_similarity, genre_similarity, actor_similarity,
-       mood_similarity, director_similarity, disliked_similarity,
+       mood_similarity, disliked_similarity,
        shared_movies_count, top_shared_movies, shared_disliked
      ) VALUES (
        $1, $2, $3,
        $4,
        $5, $6, $7,
-       $8, $9, $10,
-       $11, $12, $13
+       $8, $9,
+       $10, $11, $12
      )
      ON CONFLICT (user_id, wrapped_year) DO UPDATE SET
        matched_user_id = EXCLUDED.matched_user_id,
@@ -259,7 +258,6 @@ export const computeSoulmateForUser = async (
        genre_similarity = EXCLUDED.genre_similarity,
        actor_similarity = EXCLUDED.actor_similarity,
        mood_similarity = EXCLUDED.mood_similarity,
-       director_similarity = EXCLUDED.director_similarity,
        disliked_similarity = EXCLUDED.disliked_similarity,
        shared_movies_count = EXCLUDED.shared_movies_count,
        top_shared_movies = EXCLUDED.top_shared_movies,
@@ -272,7 +270,6 @@ export const computeSoulmateForUser = async (
       bestBreakdown.genre_similarity.toFixed(4),
       bestBreakdown.actor_similarity.toFixed(4),
       bestBreakdown.mood_similarity.toFixed(4),
-      bestBreakdown.director_similarity.toFixed(4),
       bestBreakdown.disliked_similarity.toFixed(4),
       bestBreakdown.sharedMovies.length,
       topShared,
@@ -297,7 +294,6 @@ export const getMyMatch = async (
        sm.genre_similarity,
        sm.actor_similarity,
        sm.mood_similarity,
-       sm.director_similarity,
        sm.disliked_similarity,
        sm.shared_movies_count,
        sm.top_shared_movies,

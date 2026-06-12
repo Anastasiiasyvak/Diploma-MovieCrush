@@ -40,16 +40,6 @@ const createTables = async () => {
     logger.info('Table users ready');
 
     await pool.query(`
-      ALTER TABLE users
-        ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE,
-        ADD COLUMN IF NOT EXISTS verification_token VARCHAR(64),
-        ADD COLUMN IF NOT EXISTS verification_token_expires_at TIMESTAMP,
-        ADD COLUMN IF NOT EXISTS reset_token VARCHAR(64),
-        ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMP;
-    `);
-    logger.info('Email verification + reset columns ready');
-
-    await pool.query(`
       CREATE TABLE IF NOT EXISTS user_lists (
         id BIGSERIAL PRIMARY KEY,
         user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -198,7 +188,6 @@ const createTables = async () => {
         genre_similarity DECIMAL(5,4) DEFAULT 0,
         actor_similarity DECIMAL(5,4) DEFAULT 0,
         mood_similarity DECIMAL(5,4) DEFAULT 0,
-        director_similarity DECIMAL(5,4) DEFAULT 0,
         disliked_similarity DECIMAL(5,4) DEFAULT 0,
         shared_movies_count INT DEFAULT 0,
         top_shared_movies BIGINT[] DEFAULT '{}',
@@ -288,12 +277,6 @@ const createTables = async () => {
         ADD COLUMN IF NOT EXISTS cinema_vibe_stat VARCHAR(200);
     `);
     logger.info('Wrapped: cinema_vibe columns added');
-
-    await pool.query(`
-      ALTER TABLE user_wrapped_summary
-        DROP COLUMN IF EXISTS topfan_series_count;
-    `);
-    logger.info('Wrapped: topfan_series_count removed');
 
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_wrapped_user_year
@@ -433,17 +416,6 @@ const createTables = async () => {
     logger.info('Onboarding movies updated');
 
     await pool.query(`
-      DELETE FROM onboarding_movies
-      WHERE tmdb_id IN (962796, 765285, 882569, 614917, 1891)
-        AND tmdb_id NOT IN (
-          SELECT unnest(ARRAY[238,13,680,597,155,19995,129,4935,98,857,9806,920,585,
-                              372058,149870,496243,637,475557,105,120,424,11,694,769,
-                              558,37165,9054,128,512244,508439,301528,274,489,539,1891,550])
-        );
-    `);
-    logger.info('Onboarding stale movies removed');
-
-    await pool.query(`
       ALTER TABLE onboarding_movies
         ADD COLUMN IF NOT EXISTS media_type VARCHAR(5) NOT NULL DEFAULT 'movie'
         CHECK (media_type IN ('movie', 'tv'));
@@ -479,6 +451,24 @@ const createTables = async () => {
         ON user_onboarding(user_id);
     `);
     logger.info('Table user_onboarding ready');
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_episode_watches (
+        id              BIGSERIAL PRIMARY KEY,
+        user_id         BIGINT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        series_tmdb_id  INT     NOT NULL,
+        season_number   INT     NOT NULL,
+        episode_number  INT     NOT NULL,
+        episode_tmdb_id INT,
+        watched_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (user_id, series_tmdb_id, season_number, episode_number)
+      );
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_episode_watches_user_series
+        ON user_episode_watches(user_id, series_tmdb_id);
+    `);
+    logger.info('Table user_episode_watches ready');
 
     await pool.query(`
       ALTER TABLE tmdb_media_cache 

@@ -5,7 +5,7 @@ import {
   toggleEpisodeWatch,
   markAllEpisodesWatched,
 } from './episode.service';
-import { cacheMediaIfNeeded } from '../tmdb_cache/tmdb_cache.service';
+import { fireAndCacheMedia } from '../tmdb_cache/tmdb_cache.service';
 import logger from '../../config/logger';
 
 export const fetchWatchedEpisodes = async (req: AuthRequest, res: Response) => {
@@ -37,9 +37,7 @@ export const toggleEpisode = async (req: AuthRequest, res: Response) => {
       episode_tmdb_id, total_episodes_in_series, total_seasons_in_series,
     });
 
-    cacheMediaIfNeeded(series_tmdb_id, 'tv').catch((err) => {
-      logger.error({ err, seriesTmdbId: series_tmdb_id }, 'cacheMediaIfNeeded failed for series');
-    });
+    fireAndCacheMedia(series_tmdb_id, 'tv');
 
     res.json(result);
   } catch (err) {
@@ -58,9 +56,7 @@ export const markAllEpisodes = async (req: AuthRequest, res: Response) => {
 
     const result = await markAllEpisodesWatched(req.userId!, series_tmdb_id);
 
-    cacheMediaIfNeeded(series_tmdb_id, 'tv').catch((err) => {
-      logger.error({ err, seriesTmdbId: series_tmdb_id }, 'cacheMediaIfNeeded failed for series');
-    });
+    fireAndCacheMedia(series_tmdb_id, 'tv');
 
     res.json(result);
   } catch (err) {

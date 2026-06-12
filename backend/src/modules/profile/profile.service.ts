@@ -1,32 +1,13 @@
 import pool from '../../config/database';
 import { ProfileResponse, UpdateProfileInput } from './profile.types';
 import { User } from '../shared/user.types';
+import { createDefaultLists } from '../lists/lists.service';
+import { PROFILE_COLUMNS } from '../shared/user.queries';
 import logger from '../../config/logger';
-
-const DEFAULT_LISTS = [
-  { list_type: 'watched', name: 'Watched'   },
-  { list_type: 'favorites', name: 'Favorites' },
-  { list_type: 'watchlist', name: 'Watchlist' },
-];
-
-const ensureDefaultLists = async (userId: number): Promise<void> => {
-  for (const list of DEFAULT_LISTS) {
-    await pool.query(
-      `INSERT INTO user_lists (user_id, list_type, name)
-       VALUES ($1, $2, $3)
-       ON CONFLICT DO NOTHING`,
-      [userId, list.list_type, list.name]
-    );
-  }
-};
 
 export const getUserProfile = async (userId: number): Promise<ProfileResponse | null> => {
   const userResult = await pool.query(
-    `SELECT id, uuid, email, username, first_name, last_name, profile_image_url,
-            language, instagram_username, telegram_username, soulmate_consent,
-            subscription_type, account_status, friends_count, followers_count,
-            following_count, movies_watched, series_watched, episodes_watched,
-            custom_lists_count, created_at
+    `SELECT ${PROFILE_COLUMNS}
      FROM users WHERE id = $1 AND account_status = $2`,
     [userId, 'active']
   );
@@ -39,7 +20,7 @@ export const getUserProfile = async (userId: number): Promise<ProfileResponse | 
   );
 
   if (Number(defaultListsCheck.rows[0].cnt) < 3) {
-    await ensureDefaultLists(userId);
+    await createDefaultLists(userId);
     logger.info({ userId }, 'Auto-restored default lists for user');
   }
 
@@ -71,12 +52,8 @@ export const updateUserProfile = async (
   values.push(userId);
 
   const result = await pool.query(
-    `UPDATE users SET ${fields.join(', ')} WHERE id = $${idx} RETURNING
-      id, uuid, email, username, first_name, last_name, profile_image_url,
-      language, instagram_username, telegram_username, soulmate_consent,
-      subscription_type, account_status, friends_count, followers_count,
-      following_count, movies_watched, series_watched, episodes_watched,
-      custom_lists_count, created_at`,
+    `UPDATE users SET ${fields.join(', ')} WHERE id = $${idx}
+     RETURNING ${PROFILE_COLUMNS}`,
     values
   );
   return result.rows[0] || null;

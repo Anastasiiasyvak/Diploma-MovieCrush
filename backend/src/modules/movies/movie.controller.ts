@@ -9,7 +9,7 @@ import {
   getBestActorVote, upsertBestActorVote,
   resetAllRatings,
 } from './movie.service';
-import { cacheMediaIfNeeded } from '../tmdb_cache/tmdb_cache.service';
+import { fireAndCacheMedia } from '../tmdb_cache/tmdb_cache.service';
 import logger from '../../config/logger';
 
 export const getActions = async (req: AuthRequest, res: Response) => {
@@ -31,9 +31,7 @@ export const toggleAction = async (req: AuthRequest, res: Response) => {
     const finalMediaType = media_type ?? 'movie';
     const data = await toggleMovieAction(req.userId!, { tmdb_id, action, media_type: finalMediaType });
     
-    cacheMediaIfNeeded(tmdb_id, finalMediaType).catch((err) => {
-      logger.error({ err, tmdbId: tmdb_id, mediaType: finalMediaType }, 'cacheMediaIfNeeded failed');
-    });
+    fireAndCacheMedia(tmdb_id, finalMediaType);
 
 
     res.json(data);
@@ -73,9 +71,7 @@ export const addToList = async (req: AuthRequest, res: Response) => {
     const finalMediaType = media_type ?? 'movie';
     await addToCustomList(req.userId!, { list_id, tmdb_id, media_type: finalMediaType });
 
-    cacheMediaIfNeeded(tmdb_id, finalMediaType).catch((err) => {
-      logger.error({ err, tmdbId: tmdb_id, mediaType: finalMediaType }, 'cacheMediaIfNeeded failed');
-    });
+    fireAndCacheMedia(tmdb_id, finalMediaType);
 
 
     res.status(201).json({ message: 'Added to list' });
@@ -124,9 +120,7 @@ export const saveRating = async (req: AuthRequest, res: Response) => {
     });
 
     if (!is_episode) {
-      cacheMediaIfNeeded(tmdb_id, media_type ?? 'movie').catch((err) => {
-        logger.error({ err, tmdbId: tmdb_id, mediaType: media_type ?? 'movie' }, 'cacheMediaIfNeeded failed');
-      });
+      fireAndCacheMedia(tmdb_id, media_type ?? 'movie');
     }
 
     res.json(data);
@@ -154,9 +148,7 @@ export const saveMood = async (req: AuthRequest, res: Response) => {
     if (!tmdb_id || !mood) { res.status(400).json({ error: 'tmdb_id and mood required' }); return; }
     const saved = await upsertMood(req.userId!, { tmdb_id, mood });
 
-    cacheMediaIfNeeded(tmdb_id, media_type ?? 'movie').catch((err) => {
-      logger.error({ err, tmdbId: tmdb_id, mediaType: media_type ?? 'movie' }, 'cacheMediaIfNeeded failed');
-    });
+    fireAndCacheMedia(tmdb_id, media_type ?? 'movie');
 
     res.json({ mood: saved });
   } catch (err) {
@@ -250,9 +242,7 @@ export const voteBestActor = async (req: AuthRequest, res: Response) => {
     if (!tmdb_id || !actor_tmdb_id || !actor_name) { res.status(400).json({ error: 'tmdb_id, actor_tmdb_id and actor_name required' }); return; }
     const data = await upsertBestActorVote(req.userId!, { tmdb_id, actor_tmdb_id, actor_name });
 
-    cacheMediaIfNeeded(tmdb_id, media_type ?? 'movie').catch((err) => {
-      logger.error({ err, tmdbId: tmdb_id, mediaType: media_type ?? 'movie' }, 'cacheMediaIfNeeded failed');
-    });
+    fireAndCacheMedia(tmdb_id, media_type ?? 'movie');
 
 
     res.json(data);

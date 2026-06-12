@@ -91,6 +91,12 @@ export const cacheMediaIfNeeded = async (
   }
 };
 
+export const fireAndCacheMedia = (tmdbId: number, mediaType: MediaType): void => {
+  cacheMediaIfNeeded(tmdbId, mediaType).catch((err) => {
+    logger.error({ err, tmdbId, mediaType }, 'fireAndCacheMedia failed');
+  });
+};
+
 const cacheMovie = async (tmdbId: number): Promise<void> => {
   const [details, credits] = await Promise.all([
     fetchFromTMDB<TmdbMovieDetails>(`/movie/${tmdbId}`),

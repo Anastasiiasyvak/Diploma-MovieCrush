@@ -9,6 +9,7 @@ import {
   FollowError, FOLLOW_ERROR_CODES,
 } from './follows.service';
 import logger from '../../config/logger';
+import { parseTmdbId } from '../tmdb/tmdb.helpers';
 
 const parseUserId = (raw: string): number | null => {
   const n = parseInt(raw, 10);
@@ -209,9 +210,8 @@ export const getListItems = async (req: AuthRequest, res: Response) => {
 
 export const getRatings = async (req: AuthRequest, res: Response) => {
   try {
-    const tmdbIdRaw = req.params['tmdbId'] as string;
-    const tmdbId = parseInt(tmdbIdRaw, 10);
-    if (isNaN(tmdbId)) { res.status(400).json({ error: 'Invalid tmdb id' }); return; }
+    const tmdbId = parseTmdbId(req.params['tmdbId']);
+    if (!tmdbId) { res.status(400).json({ error: 'Invalid tmdb id' }); return; }
 
     const ratings = await getFollowingRatingsForMedia(req.userId!, tmdbId);
     res.json({ ratings });

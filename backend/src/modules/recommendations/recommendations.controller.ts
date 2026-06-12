@@ -2,18 +2,10 @@ import { Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.middleware';
 import { getColdStartRecommendations } from './cold_start_service';
 import { getPersonalizedRecommendations } from './als_service';
-import pool from '../../config/database';
+import { getWatchedCount } from '../shared/user.queries';
 import logger from '../../config/logger';
 
 const PERSONALIZED_THRESHOLD = 25;
-
-const getWatchedCount = async (userId: number): Promise<number> => {
-  const res = await pool.query(
-    `SELECT COUNT(*) FROM user_movie_actions WHERE user_id = $1 AND is_watched = TRUE`,
-    [userId]
-  );
-  return Number(res.rows[0].count);
-};
 
 export const getRecommendations = async (req: AuthRequest, res: Response) => {
   try {

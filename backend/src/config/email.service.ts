@@ -133,7 +133,7 @@ export const sendResetPasswordEmail = async (
                 </tr>
                 <tr>
                   <td style="padding:24px 40px;border-top:1px solid #222222;">
-                    <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.25);text-align:center;">© 2025 MovieCrush. All rights reserved.</p>
+                    <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.25);text-align:center;">© 2026 MovieCrush. All rights reserved.</p>
                   </td>
                 </tr>
               </table>

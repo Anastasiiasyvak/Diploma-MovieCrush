@@ -10,7 +10,7 @@ import {
   isEmailVerificationEnabled,
 } from './auth.service';
 import { getUserById } from '../shared/user.queries';
-import { RegisterInput, LoginInput } from './auth.types';
+import { RegisterInput, LoginInput, AuthResponse } from './auth.types';
 import { AuthRequest } from '../../middleware/auth.middleware';
 import {
   verifySuccessPage,
@@ -196,7 +196,13 @@ export const login = async (req: Request, res: Response) => {
     const { accessToken, refreshToken } = generateTokens(user.id, user.uuid);
     const { password_hash, ...userWithoutPassword } = user;
 
-    res.status(200).json({ user: userWithoutPassword, accessToken, refreshToken });
+    const response: AuthResponse = {
+      user: userWithoutPassword,
+      accessToken,
+      refreshToken,
+    };
+    res.status(200).json(response);
+
   } catch (err: any) {
     if (err.message === 'Invalid email or password') {
       res.status(401).json({ error: 'Invalid email or password' }); return;

@@ -2,12 +2,12 @@ import pool from '../../config/database';
 import { MediaType } from '../shared/user.types';
 import { fetchFromTMDB } from '../tmdb/tmdb.service';
 import { rerankWithGemini } from './recommendations.service';
+import { getContentBucket, ContentBucket } from './cold_start_service';
+import { getWatchedCount } from '../shared/user.queries';
 import logger from '../../config/logger';
 
 const CF_SERVICE_URL = process.env.CF_SERVICE_URL ?? 'http://localhost:8000';
 
-const CF_RATIO_LOW  = 0.5;   // 25–50 переглянутих
-const CF_RATIO_HIGH = 0.7;   // 50+ переглянутих
 const CANDIDATE_POOL = 40;   // скільки тягнемо з кожного джерела
 
 export interface AlsItem {
@@ -83,20 +83,6 @@ interface TmdbDiscoverResult {
   }>;
 }
 
-type ContentBucket = 'movie' | 'tv' | 'anime' | 'anime_movie' | 'dorama' | 'animation';
-
-const getContentBucket = (m: { tmdb_id: number; genre: string; media_type: MediaType }): ContentBucket => {
-  const g = m.genre.toLowerCase();
-  if (m.media_type === 'tv') {
-    if (g === 'anime') return 'anime';
-    if (g === 'k-drama') return 'dorama';
-    return 'tv';
-  }
-  if (g === 'anime') return 'anime_movie';
-  if (g === 'animation') return 'animation';
-  return 'movie';
-};
-
 interface UserProfile {
   topGenreIds: number[];
   topActorId: number | null;
@@ -137,17 +123,6 @@ export const filterValidItems = (ids: number[], cacheMap: Map<number, CacheRow>)
 
 export const sliceToLimit = (items: AlsItem[], limit = 25): AlsItem[] =>
   items.slice(0, limit);
-
-export const getCfRatio = (watchedCount: number): number =>
-  watchedCount >= 50 ? CF_RATIO_HIGH : CF_RATIO_LOW;
-
-const getWatchedCount = async (userId: number): Promise<number> => {
-  const res = await pool.query(
-    `SELECT COUNT(*) FROM user_movie_actions WHERE user_id = $1 AND is_watched = TRUE`,
-    [userId]
-  );
-  return Number(res.rows[0].count);
-};
 
 const getExcludedIds = async (userId: number): Promise<Set<number>> => {
   const res = await pool.query(
@@ -400,7 +375,6 @@ export const getPersonalizedRecommendations = async (
   const profile = await getUserProfile(userId);
 
   logger.debug(`\n${'═'.repeat(60)}`);
-  logger.debug(`[Personalized] User ${userId} | watched: ${watchedCount} | CF ratio: ${getCfRatio(watchedCount) * 100}%`);
   logger.debug(`[Personalized] Profile → genres: [${profile.topGenreIds.join(', ')}] | top actor: ${profile.topActorId ?? 'none'}`);
   logger.debug(`[Personalized] Allowed buckets: [${[...profile.allowedBuckets].join(', ')}]`);
 

@@ -1,6 +1,7 @@
 import pool from '../../config/database';
 import { MediaType } from '../shared/user.types';
 import { fetchFromTMDB } from '../tmdb/tmdb.service';
+import { getWatchedCount } from '../shared/user.queries';
 import logger from '../../config/logger';
 
 interface OnboardingData {
@@ -113,14 +114,6 @@ export const passesLanguageGenreFilter = (
   if (isAnimation && !wantsAnimation) return false;
 
   return true;
-};
-
-const getWatchedCount = async (userId: number): Promise<number> => {
-  const res = await pool.query(
-    `SELECT COUNT(*) FROM user_movie_actions WHERE user_id = $1 AND is_watched = TRUE`,
-    [userId]
-  );
-  return Number(res.rows[0].count);
 };
 
 const getOnboardingData = async (userId: number): Promise<OnboardingData | null> => {

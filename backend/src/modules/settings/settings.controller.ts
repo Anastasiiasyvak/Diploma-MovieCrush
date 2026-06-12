@@ -9,19 +9,14 @@ import {
 } from './settings.service';
 import { updateUserProfile } from '../profile/profile.service';
 import { getUserById } from '../shared/user.queries';
-import { validatePassword } from '../auth/auth.validators';
+import { validatePassword, validateUsername } from '../auth/auth.validators';
 import logger from '../../config/logger';
-
-const USERNAME_REGEX = /^[a-zA-Z0-9._]+$/;
 
 export const patchUsername = async (req: AuthRequest, res: Response) => {
   try {
     const { username } = req.body;
-    if (!username?.trim()) { res.status(400).json({ error: 'Username is required', field: 'username' }); return; }
-    if (username.length < 3)  { res.status(400).json({ error: 'At least 3 characters', field: 'username' }); return; }
-    if (username.length > 30) { res.status(400).json({ error: 'Max 30 characters', field: 'username' }); return; }
-    if (!USERNAME_REGEX.test(username)) { res.status(400).json({ error: 'Only letters, numbers, . and _', field: 'username' }); return; }
-    if (username.startsWith('.') || username.startsWith('_')) { res.status(400).json({ error: 'Cannot start with . or _', field: 'username' }); return; }
+    const usernameError = validateUsername(username);
+    if (usernameError) { res.status(400).json({ error: usernameError, field: 'username' }); return; }
 
     const user = await updateUsername(req.userId!, username.trim());
     res.status(200).json({ user });

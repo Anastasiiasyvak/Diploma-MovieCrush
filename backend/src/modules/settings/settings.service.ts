@@ -1,6 +1,7 @@
 import pool from '../../config/database';
 import bcrypt from 'bcryptjs';
 import { User } from '../shared/user.types';
+import { PROFILE_COLUMNS } from '../shared/user.queries';
 
 export const updateUsername = async (
   userId: number,
@@ -14,12 +15,7 @@ export const updateUsername = async (
 
   const result = await pool.query(
     `UPDATE users SET username = $1, updated_at = NOW()
-     WHERE id = $2 RETURNING
-       id, uuid, email, username, first_name, last_name, profile_image_url,
-       language, instagram_username, telegram_username, soulmate_consent,
-       subscription_type, account_status, friends_count, followers_count,
-       following_count, movies_watched, series_watched, episodes_watched,
-       custom_lists_count, created_at`,
+     WHERE id = $2 RETURNING ${PROFILE_COLUMNS}`,
     [username.trim(), userId]
   );
   return result.rows[0] || null;

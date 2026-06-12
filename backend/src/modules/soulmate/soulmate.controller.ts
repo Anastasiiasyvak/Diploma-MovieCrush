@@ -21,7 +21,6 @@ const formatResponse = (row: any): SoulmateResponse => {
       genre: Number(row.genre_similarity),
       actor: Number(row.actor_similarity),
       mood: Number(row.mood_similarity),
-      director: Number(row.director_similarity),
       disliked: Number(row.disliked_similarity),
     },
     shared_movies_count: Number(row.shared_movies_count) || 0,
