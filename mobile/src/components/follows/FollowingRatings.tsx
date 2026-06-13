@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   View, Text, Image, FlatList, TouchableOpacity,
 } from 'react-native';
-import { followsService, FollowingRating } from '../../../services/followsService';
+import { followsService, FollowingRating } from '../../services/followsService';
 import { styles } from './FollowingRatings.styles';
 
 interface Props {

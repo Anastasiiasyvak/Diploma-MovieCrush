@@ -27,11 +27,7 @@ export const settingsService = {
   updateSoulmate: async (soulmate_consent: boolean): Promise<void> => {
     await api.patch('/settings/soulmate', { soulmate_consent });
   },
-
-  updateLanguage: async (language: 'en' | 'uk'): Promise<void> => {
-    await api.patch('/settings/language', { language });
-  },
-
+  
   deleteAccount: async (): Promise<void> => {
     await api.delete('/settings/account');
   },

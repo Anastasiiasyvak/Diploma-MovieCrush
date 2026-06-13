@@ -20,6 +20,8 @@ import wrappedRoutes from './modules/wrapped/wrapped.routes';
 
 const app = express();
 
+app.set('trust proxy', 1);
+
 app.use(pinoHttp({
   logger,
   serializers: {
@@ -33,7 +35,17 @@ app.use(pinoHttp({
 }));
 
 app.use(helmet());
-app.use(cors());
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ?.split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: allowedOrigins && allowedOrigins.length > 0 ? allowedOrigins : true,
+  credentials: true,
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

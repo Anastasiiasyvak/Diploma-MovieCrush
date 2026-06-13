@@ -106,14 +106,7 @@ export const checkVerified = async (req: Request, res: Response) => {
     if (!email) { res.status(400).json({ error: 'Email is required' }); return; }
 
     const result = await checkEmailVerified(email.trim().toLowerCase());
-    if (!result) { res.status(404).json({ verified: false }); return; }
-
-    if (result.verified) {
-      const { accessToken, refreshToken } = generateTokens(result.userId, result.uuid);
-      res.status(200).json({ verified: true, accessToken, refreshToken });
-    } else {
-      res.status(200).json({ verified: false });
-    }
+    res.status(200).json({ verified: result?.verified === true });
   } catch (err) {
     logger.error({ err }, 'checkVerified failed');
     res.status(500).json({ error: 'Internal server error' });

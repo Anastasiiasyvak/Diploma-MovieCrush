@@ -1,6 +1,6 @@
 import { StyleSheet, Dimensions } from 'react-native';
-import { COLORS } from '../../../constants/colors';
-import { FONTS } from '../../../constants/fonts';
+import { COLORS } from '../../constants/colors';
+import { FONTS } from '../../constants/fonts';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAX_WIDTH = 480;

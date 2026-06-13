@@ -11,14 +11,6 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  loadingText: {
-    fontFamily: FONTS.regular,
-    fontSize: 14,
-    color: COLORS.gray,
-    marginTop: 14,
-    textAlign: 'center',
-  },
-
   scrollContent: { alignItems: 'center', paddingBottom: 40 },
   inner: { width: '100%', maxWidth: 480 },
 

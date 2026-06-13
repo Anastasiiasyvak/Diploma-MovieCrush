@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import {
   View, Text, Image, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
-import { COLORS } from '../../../constants/colors';
-import { POSTER_SIZES } from '../../../constants/tmdb';
-import { followsService } from '../../../services/followsService';
-import { movieService } from '../../../services/movieService';
+import { COLORS } from '../../constants/colors';
+import { POSTER_SIZES } from '../../constants/tmdb';
+import { followsService } from '../../services/followsService';
+import { movieService } from '../../services/movieService';
 import { styles, GRID_CONFIG } from './PublicListGrid.styles';
-import { MediaType } from '../../../types/tmdb.types';
+import { MediaType } from '../../types/tmdb.types';
 
 interface MediaMeta {
   tmdb_id: number;

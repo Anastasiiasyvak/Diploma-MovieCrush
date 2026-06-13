@@ -1,0 +1,110 @@
+import { StyleSheet, Platform } from 'react-native';
+import { COLORS } from '../../constants/colors';
+import { FONTS } from '../../constants/fonts';
+
+const MAX_WIDTH = 480;
+
+export const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.background },
+  loadingContainer: { flex: 1, backgroundColor: COLORS.background, alignItems: 'center', justifyContent: 'center' },
+  scrollContent: { alignItems: 'center' },
+  inner: { width: '100%', maxWidth: MAX_WIDTH },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 56 : 36,
+    paddingBottom: 12,
+  },
+  settingsIcon: { fontSize: 20, color: COLORS.cardTextLight },
+
+  heroSection: { alignItems: 'center', paddingHorizontal: 20 },
+  avatarWrapper: { borderWidth: 2.5, borderColor: COLORS.gold, overflow: 'hidden', marginBottom: 12 },
+  avatarImage: { width: '100%', height: '100%', borderRadius: 999 },
+  avatarPlaceholder: { backgroundColor: COLORS.cardDark, alignItems: 'center', justifyContent: 'center' },
+  silhouetteHead: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#333', marginBottom: 2, marginTop: -8 },
+  silhouetteBody: { width: 44, height: 24, borderRadius: 22, backgroundColor: '#333' },
+  username: { fontFamily: FONTS.semiBold, fontSize: 18, color: COLORS.pink, marginBottom: 2 },
+  fullName: { fontFamily: FONTS.regular, fontSize: 13, color: '#666666', marginBottom: 4 },
+  memberSince: { fontFamily: FONTS.regular, fontSize: 12, color: COLORS.darkGray, marginBottom: 14 },
+  socialsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+
+  followRow: { flexDirection: 'row', borderTopWidth: 0.5, borderBottomWidth: 0.5, borderColor: COLORS.cardDark, marginBottom: 16 },
+  followCell: { flex: 1, paddingVertical: 12, alignItems: 'center' },
+  followDivider: { width: 0.5, backgroundColor: COLORS.cardDark },
+  followNum: { fontFamily: FONTS.semiBold, fontSize: 17, color: COLORS.gold },
+  followLabel: { fontFamily: FONTS.regular, fontSize: 11, color: COLORS.cardTextLight, marginTop: 2 },
+
+  statsRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, marginBottom: 20 },
+
+  tabsScroll: { marginBottom: 0 },
+  tabsContainer: { paddingHorizontal: 20, gap: 4, borderBottomWidth: 0.5, borderBottomColor: COLORS.cardDark },
+  tab: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabActive: { borderBottomColor: COLORS.gold },
+  tabAdd: { marginLeft: 4 },
+  tabLabel: { fontFamily: FONTS.medium, fontSize: 13, color: COLORS.cardTextLight },
+  tabLabelActive: { color: COLORS.gold },
+  tabLabelAdd: { fontFamily: FONTS.medium, fontSize: 13, color: COLORS.pink },
+
+  listControlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.cardDark,
+  },
+  privacyToggle: { paddingVertical: 5, paddingHorizontal: 12, borderRadius: 12, borderWidth: 0.5, borderColor: '#333' },
+  privacyToggleText: { fontFamily: FONTS.regular, fontSize: 12, color: '#888888' },
+  deleteBtn: { paddingVertical: 5, paddingHorizontal: 12, borderRadius: 12, borderWidth: 0.5, borderColor: 'rgba(255,77,77,0.3)' },
+  deleteBtnText: { fontFamily: FONTS.regular, fontSize: 12, color: COLORS.error },
+
+  createOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  createCard: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 20,
+    borderWidth: 0.5,
+    borderColor: '#222',
+    width: '100%',
+    maxWidth: 360,
+    overflow: 'hidden',
+  },
+  createHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    paddingBottom: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.cardDark,
+  },
+  createTitle: { fontFamily: FONTS.semiBold, fontSize: 18, color: COLORS.white },
+  createCloseBtn: { fontSize: 18, color: COLORS.cardTextLight, paddingHorizontal: 4 },
+  createBody: { padding: 20, gap: 16 },
+  createInput: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: COLORS.gold,
+    borderRadius: 12,
+    padding: 14,
+    color: COLORS.white,
+    fontSize: 16,
+    fontFamily: FONTS.regular,
+  },
+  createPrivacyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 },
+  createPrivacyLabel: { fontFamily: FONTS.medium, fontSize: 14, color: COLORS.white, marginBottom: 2 },
+  createPrivacyHint: { fontFamily: FONTS.regular, fontSize: 12, color: COLORS.cardTextLight },
+  createBtn: { backgroundColor: COLORS.gold, borderRadius: 50, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
+  createBtnDisabled: { opacity: 0.4 },
+  createBtnText: { fontFamily: FONTS.semiBold, fontSize: 16, color: COLORS.background },
+});

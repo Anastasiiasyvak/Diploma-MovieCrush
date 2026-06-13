@@ -33,6 +33,7 @@ export const styles = StyleSheet.create({
   selectedCount: { fontFamily: FONTS.regular, fontSize: 13, color: COLORS.gray },
   nextBtn: { backgroundColor: COLORS.pink, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 24, minWidth: 110, alignItems: 'center' },
   nextBtnText: { fontFamily: FONTS.semiBold, fontSize: 15, color: COLORS.background },
+  saveErrorText: { fontFamily: FONTS.regular, fontSize: 12, color: COLORS.error, flex: 1, marginRight: 12 },
   noneBtn: { flex: 1, alignItems: 'center', paddingVertical: 12 },
   noneBtnText: { fontFamily: FONTS.medium, fontSize: 15, color: COLORS.gray },
 

@@ -143,7 +143,7 @@ const callGeminiOnce = async (
   | { ok: true; data: GeminiRawResponse; truncated: boolean }
   | { ok: false; status: number; body: string; retriable: boolean }
 > => {
-  const url = `${GEMINI_BASE_URL}/${model}:generateContent?key=${apiKey}`;
+  const url = `${GEMINI_BASE_URL}/${model}:generateContent`;
 
   const body = {
     contents: [
@@ -162,7 +162,7 @@ const callGeminiOnce = async (
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify(body),
   });
 

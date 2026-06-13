@@ -1,4 +1,4 @@
-import api from './api';
+import { fetchTMDB } from './tmdbClient';
 import {
   Movie, TVSeries, TMDBResponse, MediaItem, DiscoverFilters,
   MediaType,
@@ -12,14 +12,6 @@ export interface Person {
   known_for_department: string | null;
   known_for?: Array<{ title?: string; name?: string }>;
 }
-
-const fetchTMDB = async <T>(
-  endpoint: string,
-  params?: Record<string, string>,
-): Promise<T> => {
-  const response = await api.get<T>(`/tmdb${endpoint}`, { params });
-  return response.data;
-};
 
 const shuffle = <T>(arr: T[]): T[] => {
   const a = [...arr];
@@ -170,20 +162,11 @@ export const tmdbService = {
   getUpcomingMovies: (page = 1) =>
     fetchTMDB<TMDBResponse<Movie>>('/movie/upcoming', { page: String(page) }),
 
-  getMovieDetails: (movieId: number) =>
-    fetchTMDB<Movie>(`/movie/${movieId}`),
-
   searchMovies: (query: string, page = 1) =>
     fetchTMDB<TMDBResponse<Movie>>('/search/movie', { query, page: String(page) }),
 
   getTrendingSeries: (timeWindow: 'day' | 'week' = 'week') =>
     fetchTMDB<TMDBResponse<TVSeries>>(`/trending/tv/${timeWindow}`),
-
-  getTopRatedSeries: (page = 1) =>
-    fetchTMDB<TMDBResponse<TVSeries>>('/tv/top_rated', { page: String(page) }),
-
-  getSeriesDetails: (seriesId: number) =>
-    fetchTMDB<TVSeries>(`/tv/${seriesId}`),
 
   searchSeries: (query: string, page = 1) =>
     fetchTMDB<TMDBResponse<TVSeries>>('/search/tv', { query, page: String(page) }),

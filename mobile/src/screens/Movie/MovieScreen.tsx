@@ -1,16 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
-  View, Text, ScrollView, StyleSheet, ActivityIndicator,
+  View, Text, ScrollView, ActivityIndicator,
   TouchableOpacity, StatusBar,
 } from 'react-native';
 import { COLORS } from '../../constants/colors';
-import { FONTS } from '../../constants/fonts';
 import { tmdbMovieService } from '../../services/tmdbMovieService';
 import { movieService } from '../../services/movieService';
 import { getAccessToken } from '../../services/storage';
 import { CustomAlert } from '../../components/ui/CustomAlert';
-
+import { styles } from './MovieScreen.styles';
 import { MovieHero } from '../../components/movie/MovieHero';
 import { MovieActionsBar } from '../../components/movie/MovieActions';
 import { MovieInfo } from '../../components/movie/MovieInfo';
@@ -22,7 +21,7 @@ import { StarRating } from '../../components/movie/StarRating';
 import { MoodPicker } from '../../components/movie/MoodPicker';
 import { BestActorPicker } from '../../components/movie/BestActorPicker';
 import { DetailedRatingSection } from '../../components/movie/DetailedRating';
-import { FollowingRatings } from '../../components/follows/FollowingRatings/FollowingRatings';
+import { FollowingRatings } from '../../components/follows/FollowingRatings';
 
 import {
   MovieDetails, MovieCredits, MovieImagesResponse,
@@ -371,40 +370,3 @@ export default function MovieScreen({ navigation, route }: any) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  fullCenter: { flex: 1, backgroundColor: COLORS.background, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  scroll: { paddingBottom: 24 },
-
-  errorEmoji: { fontSize: 40 },
-  errorText: { fontFamily: FONTS.regular, fontSize: 14, color: COLORS.gray, textAlign: 'center', paddingHorizontal: 32 },
-  retryBtn: { marginTop: 8, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: COLORS.gold },
-  retryText: { fontFamily: FONTS.medium, fontSize: 14, color: COLORS.gold },
-
-  tabsRow: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 16, gap: 8 },
-  tab: {
-    flex: 1, paddingVertical: 10, borderRadius: 20,
-    borderWidth: 1, borderColor: COLORS.cardDark,
-    alignItems: 'center', backgroundColor: COLORS.cardBg,
-  },
-  tabActive: { backgroundColor: 'rgba(255,215,0,0.12)', borderColor: 'rgba(255,215,0,0.5)' },
-  tabText: { fontFamily: FONTS.medium, fontSize: 14, color: COLORS.gray },
-  tabTextActive: { color: COLORS.gold },
-
-  divider: { height: 0.5, backgroundColor: COLORS.cardDark, marginHorizontal: 16, marginVertical: 20 },
-
-  tabContent: { gap: 0 },
-  gap: { height: 24 },
-
-  rateSection: { paddingHorizontal: 16, alignItems: 'center', gap: 12 },
-  rateSectionTitle: { fontFamily: FONTS.semiBold, fontSize: 15, color: COLORS.white },
-
-  resetWrap: { paddingHorizontal: 16, paddingTop: 24, alignItems: 'center' },
-  resetBtn: {
-    paddingHorizontal: 24, paddingVertical: 10,
-    borderRadius: 20, borderWidth: 1,
-    borderColor: 'rgba(255,77,77,0.4)',
-  },
-  resetBtnText: { fontFamily: FONTS.medium, fontSize: 13, color: COLORS.error },
-});

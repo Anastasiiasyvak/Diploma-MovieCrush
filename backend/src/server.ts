@@ -5,6 +5,22 @@ import logger from './config/logger';
 
 dotenv.config();
 
+const REQUIRED_ENV = [
+  'JWT_SECRET',
+  'JWT_REFRESH_SECRET',
+  'DB_HOST',
+  'DB_PORT',
+  'DB_NAME',
+  'DB_USER',
+  'DB_PASSWORD',
+];
+
+const missingEnv = REQUIRED_ENV.filter((key) => !process.env[key]);
+if (missingEnv.length > 0) {
+  logger.error({ missing: missingEnv }, 'Missing required environment variables');
+  process.exit(1);
+}
+
 const PORT = process.env.PORT || 3000;
 
 const start = async () => {

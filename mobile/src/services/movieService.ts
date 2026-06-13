@@ -1,15 +1,6 @@
 import api from './api';
-import { MovieActions, DetailedRating, MovieComment, MoodType, UserList } from '../types/movie.types';
 import { MediaType } from '../types/tmdb.types';
-
-export interface BatchMediaMeta {
-  tmdb_id: number;
-  title: string | null;
-  poster_path: string | null;
-  release_date: string;
-  vote_average: number;
-  media_type: MediaType;
-}
+import { MovieActions, DetailedRating, MovieComment, MoodType, UserList, BatchMediaMeta } from '../types/movie.types';
 
 export const movieService = {
   getActions: async (tmdbId: number): Promise<MovieActions> => {

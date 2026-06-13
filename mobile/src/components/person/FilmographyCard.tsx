@@ -15,7 +15,7 @@ const CARD_H = CARD_W * 1.5;
 
 interface FilmographyCardProps {
   item: CastCredit | CrewCredit;
-  onPress?: () => void; // я поки не реалізувала
+  onPress?: () => void;
 }
 
 const getTitle = (item: CastCredit | CrewCredit): string =>

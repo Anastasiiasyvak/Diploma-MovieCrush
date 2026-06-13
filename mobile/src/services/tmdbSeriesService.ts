@@ -1,19 +1,10 @@
-import api from './api';
+import { fetchTMDB } from './tmdbClient';
 import {
   SeriesDetails, SeriesCredits, SeriesImagesResponse,
   SeriesVideosResponse, SimilarSeries, SeriesSeasonDetail,
   SeriesEpisode,
 } from '../types/series.types';
-
-interface TMDBListResponse<T> { results: T[] }
-
-const fetchTMDB = async <T>(
-  endpoint: string,
-  params?: Record<string, string | number>,
-): Promise<T> => {
-  const response = await api.get<T>(`/tmdb${endpoint}`, { params });
-  return response.data;
-};
+import { TMDBResponse } from '../types/tmdb.types';
 
 export const tmdbSeriesService = {
   getSeriesDetails: (seriesId: number) =>
@@ -29,10 +20,10 @@ export const tmdbSeriesService = {
     fetchTMDB<SeriesVideosResponse>(`/tv/${seriesId}/videos`),
 
   getSimilarSeries: (seriesId: number) =>
-    fetchTMDB<TMDBListResponse<SimilarSeries>>(`/tv/${seriesId}/similar`),
+    fetchTMDB<TMDBResponse<SimilarSeries>>(`/tv/${seriesId}/similar`),
 
   getSeriesRecommendations: (seriesId: number) =>
-    fetchTMDB<TMDBListResponse<SimilarSeries>>(`/tv/${seriesId}/recommendations`),
+    fetchTMDB<TMDBResponse<SimilarSeries>>(`/tv/${seriesId}/recommendations`),
 
   getSeasonDetail: (seriesId: number, seasonNumber: number) =>
     fetchTMDB<SeriesSeasonDetail>(`/tv/${seriesId}/season/${seasonNumber}`),

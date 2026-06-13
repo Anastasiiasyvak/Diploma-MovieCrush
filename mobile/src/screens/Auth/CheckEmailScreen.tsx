@@ -6,7 +6,6 @@ import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/fonts';
 import { Logo } from '../../components/ui/Logo';
 import { OutlineButton } from '../../components/ui/OutlineButton';
-import { saveTokens } from '../../services/storage';
 import api from '../../services/api';
 
 export default function CheckEmailScreen({ route, navigation }: any) {
@@ -23,8 +22,10 @@ export default function CheckEmailScreen({ route, navigation }: any) {
           clearInterval(intervalRef.current!);
           setIsPolling(false);
 
-          await saveTokens(response.data.accessToken, response.data.refreshToken);
-          navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Login', params: { email, justVerified: true } }],
+          });
         }
       } catch (err) {
         console.error('Polling error:', err);
