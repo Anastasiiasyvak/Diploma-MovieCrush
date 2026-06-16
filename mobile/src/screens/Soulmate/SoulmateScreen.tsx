@@ -204,7 +204,7 @@ export default function SoulmateScreen({ navigation }: any) {
 
               <Text style={styles.sectionTitle}>Why you match</Text>
               <BreakdownBar label="Ratings" value={match.breakdown.rating} />
-              <BreakdownBar label="Genres" value={match.breakdown.genre} />
+              <BreakdownBar label="Watched" value={match.breakdown.genre} />
               <BreakdownBar label="Actors" value={match.breakdown.actor} />
               <BreakdownBar label="Mood" value={match.breakdown.mood} />
               <BreakdownBar label="Disliked" value={match.breakdown.disliked} />
