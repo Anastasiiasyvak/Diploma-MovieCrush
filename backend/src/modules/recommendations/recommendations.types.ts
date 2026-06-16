@@ -1,3 +1,5 @@
+import { MediaType } from "../shared/user.types";
+
 export interface WatchedMovieForPrompt {
   title: string;
   rating: number | null;       
@@ -13,7 +15,7 @@ export interface AiRecommendationItem {
   why_this_will_work: string;
 
   tmdb_id?: number;
-  media_type?: 'movie' | 'tv';
+  media_type?: MediaType;
   poster_path?: string | null;
   vote_average?: number;
   overview?: string;

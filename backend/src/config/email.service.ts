@@ -1,8 +1,22 @@
 import { Resend } from 'resend';
+import logger from './logger';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 const FROM_EMAIL = 'MovieCrush <onboarding@resend.dev>';
+
+let resendClient: Resend | null = null;
+
+const getResend = (): Resend | null => {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    logger.warn('RESEND_API_KEY is not set - email sending is disabled.');
+    return null;
+  }
+  if (!resendClient) {
+    resendClient = new Resend(apiKey);
+  }
+  return resendClient;
+};
 
 // Verification email
 
@@ -12,6 +26,9 @@ export const sendVerificationEmail = async (
   token: string
 ): Promise<void> => {
   const verifyUrl = `${APP_URL}/api/auth/verify/${token}`;
+
+  const resend = getResend();
+  if (!resend) return;
 
   await resend.emails.send({
     from: FROM_EMAIL,
@@ -72,6 +89,9 @@ export const sendResetPasswordEmail = async (
 ): Promise<void> => {
   const resetUrl = `${APP_URL}/api/auth/reset-password/${token}`;
 
+  const resend = getResend();
+  if (!resend) return;
+
   await resend.emails.send({
     from: FROM_EMAIL,
     to: email,
@@ -113,7 +133,7 @@ export const sendResetPasswordEmail = async (
                 </tr>
                 <tr>
                   <td style="padding:24px 40px;border-top:1px solid #222222;">
-                    <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.25);text-align:center;">© 2025 MovieCrush. All rights reserved.</p>
+                    <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.25);text-align:center;">© 2026 MovieCrush. All rights reserved.</p>
                   </td>
                 </tr>
               </table>

@@ -5,6 +5,7 @@ import {
   hasCompletedOnboarding,
   completeOnboarding,
 } from './onboarding.service';
+import logger from '../../config/logger';
 
 export const getContent = async (req: AuthRequest, res: Response) => {
   try {
@@ -12,7 +13,7 @@ export const getContent = async (req: AuthRequest, res: Response) => {
     const content = await getOnboardingContent(batch);
     res.json(content);
   } catch (err: any) {
-    console.error('getOnboardingContent error:', err);
+    logger.error({ err }, 'getOnboardingContent failed');
     res.status(500).json({ error: 'Failed to load onboarding content' });
   }
 };
@@ -22,7 +23,7 @@ export const checkStatus = async (req: AuthRequest, res: Response) => {
     const completed = await hasCompletedOnboarding(req.userId!);
     res.json({ completed });
   } catch (err: any) {
-    console.error('checkOnboardingStatus error:', err);
+    logger.error({ err, userId: req.userId }, 'checkOnboardingStatus failed');
     res.status(500).json({ error: 'Failed to check onboarding status' });
   }
 };
@@ -39,7 +40,7 @@ export const complete = async (req: AuthRequest, res: Response) => {
 
     res.json({ success: true });
   } catch (err: any) {
-    console.error('completeOnboarding error:', err);
+    logger.error({ err, userId: req.userId }, 'completeOnboarding failed');
     res.status(500).json({ error: 'Failed to save onboarding data' });
   }
 };

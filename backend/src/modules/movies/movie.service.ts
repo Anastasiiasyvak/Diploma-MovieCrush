@@ -5,6 +5,7 @@ import {
   MoodInput, MoodType, CommentInput, CommentResponse,
   BestActorVoteInput,
 } from './movie.types';
+import logger from '../../config/logger';
 
 
 export const getMovieActions = async (
@@ -51,6 +52,32 @@ export const toggleMovieAction = async (
        WHERE user_id = $2 AND tmdb_id = $3`,
       [newValue, userId, input.tmdb_id]
     );
+
+
+    if (newValue && input.action === 'favorite') {
+      await client.query(
+        `UPDATE user_movie_actions SET is_disliked = FALSE, updated_at = NOW()
+         WHERE user_id = $1 AND tmdb_id = $2`,
+        [userId, input.tmdb_id]
+      );
+    }
+    if (newValue && input.action === 'dislike') {
+      await client.query(
+        `UPDATE user_movie_actions SET is_favorite = FALSE, updated_at = NOW()
+         WHERE user_id = $1 AND tmdb_id = $2`,
+        [userId, input.tmdb_id]
+      );
+      const favList = await client.query(
+        `SELECT id FROM user_lists WHERE user_id = $1 AND list_type = 'favorites'`,
+        [userId]
+      );
+      if (favList.rows.length > 0) {
+        await client.query(
+          `DELETE FROM list_items WHERE list_id = $1 AND tmdb_id = $2`,
+          [favList.rows[0].id, input.tmdb_id]
+        );
+      }
+    }
 
     if (input.action === 'favorite' && newValue) {
       await client.query(
@@ -126,7 +153,7 @@ export const toggleMovieAction = async (
     return updated.rows[0];
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('toggleMovieAction failed for user', userId, 'tmdb', input.tmdb_id, error);
+    logger.error({ err: error, userId, tmdbId: input.tmdb_id }, 'toggleMovieAction failed');
     throw error;
   } finally {
     client.release();
@@ -220,7 +247,7 @@ export const removeFromCustomList = async (
     return { list_type };
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('removeFromCustomList failed for user', userId, 'list', listId, 'tmdb', tmdbId, error);
+    logger.error({ err: error, userId, listId, tmdbId }, 'removeFromCustomList failed');
     throw error;
   } finally {
     client.release();
@@ -257,7 +284,7 @@ export const upsertRating = async (
   try {
     await client.query('BEGIN');
 
-    if (input.overall_rating != null) {
+    if (input.overall_rating != null && !input.is_episode) {
       await client.query(
         `INSERT INTO user_movie_actions (user_id, tmdb_id, is_watched)
          VALUES ($1, $2, TRUE)
@@ -306,7 +333,7 @@ export const upsertRating = async (
     return result.rows[0];
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('upsertRating failed for user', userId, 'tmdb', input.tmdb_id, error);
+    logger.error({ err: error, userId, tmdbId: input.tmdb_id }, 'upsertRating failed');
     throw error;
   } finally {
     client.release();
@@ -330,6 +357,21 @@ export const upsertMood = async (userId: number, input: MoodInput): Promise<Mood
     [userId, input.tmdb_id, input.mood]
   );
   return result.rows[0].mood;
+};
+
+const attachAuthor = async (
+  userId: number,
+  comment: any
+): Promise<CommentResponse> => {
+  let username = null, profile_image_url = null;
+  if (!comment.is_anonymous) {
+    const user = await pool.query(
+      'SELECT username, profile_image_url FROM users WHERE id = $1', [userId]
+    );
+    username = user.rows[0]?.username ?? null;
+    profile_image_url = user.rows[0]?.profile_image_url ?? null;
+  }
+  return { ...comment, username, profile_image_url, my_reaction: null };
 };
 
 
@@ -372,15 +414,7 @@ export const createComment = async (
       input.is_anonymous ?? false, input.has_spoiler ?? false]
   );
   const c = result.rows[0];
-  let username = null, profile_image_url = null;
-  if (!c.is_anonymous) {
-    const user = await pool.query(
-      'SELECT username, profile_image_url FROM users WHERE id = $1', [userId]
-    );
-    username = user.rows[0]?.username ?? null;
-    profile_image_url = user.rows[0]?.profile_image_url ?? null;
-  }
-  return { ...c, username, profile_image_url, my_reaction: null };
+  return attachAuthor(userId, c);
 };
 
 export const updateComment = async (
@@ -395,15 +429,7 @@ export const updateComment = async (
   );
   if (result.rows.length === 0) return null;
   const c = result.rows[0];
-  let username = null, profile_image_url = null;
-  if (!c.is_anonymous) {
-    const user = await pool.query(
-      'SELECT username, profile_image_url FROM users WHERE id = $1', [userId]
-    );
-    username = user.rows[0]?.username ?? null;
-    profile_image_url = user.rows[0]?.profile_image_url ?? null;
-  }
-  return { ...c, username, profile_image_url, my_reaction: null };
+  return attachAuthor(userId, c);
 };
 
 export const deleteComment = async (userId: number, commentId: number): Promise<boolean> => {
@@ -483,16 +509,29 @@ export const upsertBestActorVote = async (
 
 
 export const resetAllRatings = async (userId: number, tmdbId: number): Promise<void> => {
-  await pool.query(
-    `DELETE FROM user_detailed_ratings WHERE user_id = $1 AND tmdb_id = $2`,
-    [userId, tmdbId]
-  );
-  await pool.query(
-    `DELETE FROM user_movie_moods WHERE user_id = $1 AND tmdb_id = $2`,
-    [userId, tmdbId]
-  );
-  await pool.query(
-    `DELETE FROM user_best_actor_votes WHERE user_id = $1 AND tmdb_id = $2`,
-    [userId, tmdbId]
-  );
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    await client.query(
+      `DELETE FROM user_detailed_ratings WHERE user_id = $1 AND tmdb_id = $2`,
+      [userId, tmdbId]
+    );
+    await client.query(
+      `DELETE FROM user_movie_moods WHERE user_id = $1 AND tmdb_id = $2`,
+      [userId, tmdbId]
+    );
+    await client.query(
+      `DELETE FROM user_best_actor_votes WHERE user_id = $1 AND tmdb_id = $2`,
+      [userId, tmdbId]
+    );
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error({ err: error, userId, tmdbId }, 'resetAllRatings failed');
+    throw error;
+  } finally {
+    client.release();
+  }
 };

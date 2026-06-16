@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.middleware';
 import { computeWrappedForUser, getWrappedSummary } from './wrapped.service';
+import logger from '../../config/logger';
 
 const formatResponse = (row: any) => ({
   wrapped_year: Number(row.wrapped_year),
@@ -62,7 +63,7 @@ export const getMyWrapped = async (req: AuthRequest, res: Response) => {
     }
     res.json(formatResponse(row));
   } catch (err) {
-    console.error('getMyWrapped error:', err);
+    logger.error({ err, userId: req.userId }, 'getMyWrapped failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -78,7 +79,7 @@ export const recomputeMyWrapped = async (req: AuthRequest, res: Response) => {
     }
     res.json({ message: 'Wrapped recomputed', wrapped: formatResponse(row) });
   } catch (err) {
-    console.error('recomputeMyWrapped error:', err);
+    logger.error({ err, userId: req.userId }, 'recomputeMyWrapped failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };

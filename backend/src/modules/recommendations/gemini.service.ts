@@ -1,4 +1,5 @@
 import { GeminiRawResponse } from './recommendations.types';
+import logger from '../../config/logger';
 
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const DEFAULT_MODEL = 'gemini-2.5-flash';
@@ -142,7 +143,7 @@ const callGeminiOnce = async (
   | { ok: true; data: GeminiRawResponse; truncated: boolean }
   | { ok: false; status: number; body: string; retriable: boolean }
 > => {
-  const url = `${GEMINI_BASE_URL}/${model}:generateContent?key=${apiKey}`;
+  const url = `${GEMINI_BASE_URL}/${model}:generateContent`;
 
   const body = {
     contents: [
@@ -161,7 +162,7 @@ const callGeminiOnce = async (
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify(body),
   });
 
@@ -205,9 +206,9 @@ const callGeminiOnce = async (
     if (recovered) {
       try {
         parsed = JSON.parse(recovered) as GeminiRawResponse;
-        console.warn(
-          `[Gemini] Recovered from truncated JSON. ` +
-            `finishReason=${finishReason}. Saved ${parsed.recommendations?.length ?? 0} recs.`
+        logger.warn(
+          { finishReason, recovered: parsed.recommendations?.length ?? 0 },
+          '[Gemini] Recovered from truncated JSON'
         );
       } catch {
         parsed = null;
@@ -216,9 +217,9 @@ const callGeminiOnce = async (
   }
 
   if (!parsed) {
-    console.error(
-      `Gemini JSON parse failed. finishReason=${finishReason}. Raw text:`,
-      rawText.slice(0, 1000) + (rawText.length > 1000 ? '...[truncated]' : '')
+    logger.error(
+      { finishReason, rawText: rawText.slice(0, 1000) + (rawText.length > 1000 ? '...[truncated]' : '') },
+      '[Gemini] JSON parse failed'
     );
     return {
       ok: false,
@@ -279,9 +280,9 @@ export const callGemini = async (prompt: string): Promise<GeminiRawResponse> => 
       waitMs = Math.min(BASE_BACKOFF_MS * Math.pow(2, attempt), MAX_WAIT_MS);
     }
 
-    console.warn(
-      `[Gemini] ${result.status} on attempt ${attempt + 1}/${MAX_RETRIES + 1}. ` +
-        `Waiting ${waitMs}ms before retry...`
+    logger.warn(
+      { status: result.status, attempt: attempt + 1, maxAttempts: MAX_RETRIES + 1, waitMs },
+      '[Gemini] retriable error, waiting before retry'
     );
     await sleep(waitMs);
   }

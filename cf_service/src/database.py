@@ -3,27 +3,41 @@ import psycopg2.extras
 from psycopg2 import pool as pg_pool
 import os
 from dotenv import load_dotenv
+from logging_config import get_logger
 
 load_dotenv()
 
-_pool = pg_pool.SimpleConnectionPool(
-    minconn=1,
-    maxconn=10,
-    host=os.getenv("DB_HOST"),
-    port=os.getenv("DB_PORT"),
-    dbname=os.getenv("DB_NAME"),
-    user=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASSWORD"),
-)
+log = get_logger(__name__)
+
+_pool = None
+
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        sslmode = "require" if os.getenv("DB_SSL") == "true" else "disable"
+        _pool = pg_pool.SimpleConnectionPool(
+            minconn=1,
+            maxconn=10,
+            host=os.getenv("DB_HOST"),
+            port=os.getenv("DB_PORT"),
+            dbname=os.getenv("DB_NAME"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            sslmode=sslmode,
+        )
+    return _pool
+
 
 def fetch_all(query: str, params=None):
-    conn = _pool.getconn()
+    pool = _get_pool()
+    conn = pool.getconn()
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(query, params)
             return cur.fetchall()
-    except Exception as e:
-        print(f"Database error: {e}", flush=True)
+    except Exception:
+        log.exception("Database error")
         raise
     finally:
-        _pool.putconn(conn)
+        pool.putconn(conn)

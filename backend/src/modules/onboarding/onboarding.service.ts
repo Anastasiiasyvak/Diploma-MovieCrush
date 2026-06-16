@@ -5,6 +5,7 @@ import {
   OnboardingContent,
   CompleteOnboardingPayload,
 } from './onboarding.types';
+import logger from '../../config/logger';
 
 
 export const getOnboardingContent = async (batch = 1): Promise<OnboardingContent> => {
@@ -81,15 +82,19 @@ export const completeOnboarding = async (
       );
       if (watchedList.rows.length > 0) {
         const listId = watchedList.rows[0].id;
-        for (const tmdbId of watched_tmdb_ids) {
-          const mediaType = mediaTypeMap.get(tmdbId) ?? 'movie';
-          await client.query(
-            `INSERT INTO list_items (list_id, tmdb_id, media_type)
-             VALUES ($1, $2, $3)
-             ON CONFLICT DO NOTHING`,
-            [listId, tmdbId, mediaType]
-          );
-        }
+        const listValues: (number | string)[] = [];
+        const listRows = watched_tmdb_ids.map((tmdbId, i) => {
+          const offset = i * 3;
+          listValues.push(listId, tmdbId, mediaTypeMap.get(tmdbId) ?? 'movie');
+          return `($${offset + 1}, $${offset + 2}, $${offset + 3})`;
+        });
+
+        await client.query(
+          `INSERT INTO list_items (list_id, tmdb_id, media_type)
+           VALUES ${listRows.join(', ')}
+           ON CONFLICT DO NOTHING`,
+          listValues
+        );
       }
 
       await client.query(
@@ -104,21 +109,27 @@ export const completeOnboarding = async (
     }
 
     const ratingEntries = Object.entries(ratings);
-    for (const [tmdbIdStr, rating] of ratingEntries) {
-      const tmdbId = Number(tmdbIdStr);
+    if (ratingEntries.length > 0) {
+      const ratingValues: number[] = [];
+      const ratingRows = ratingEntries.map(([tmdbIdStr, rating], i) => {
+        const offset = i * 3;
+        ratingValues.push(userId, Number(tmdbIdStr), Number(rating));
+        return `($${offset + 1}, $${offset + 2}, $${offset + 3}, NOW())`;
+      });
+
       await client.query(
         `INSERT INTO user_detailed_ratings (user_id, tmdb_id, overall_rating, updated_at)
-         VALUES ($1, $2, $3, NOW())
+         VALUES ${ratingRows.join(', ')}
          ON CONFLICT (user_id, tmdb_id) DO UPDATE
            SET overall_rating = EXCLUDED.overall_rating, updated_at = NOW()`,
-        [userId, tmdbId, rating]
+        ratingValues
       );
     }
 
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('completeOnboarding failed for user', userId, error);
+    logger.error({ err: error, userId }, 'completeOnboarding failed');
     throw error;
   } finally {
     client.release();

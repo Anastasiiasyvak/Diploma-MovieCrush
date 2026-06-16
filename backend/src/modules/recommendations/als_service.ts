@@ -1,16 +1,18 @@
 import pool from '../../config/database';
+import { MediaType } from '../shared/user.types';
 import { fetchFromTMDB } from '../tmdb/tmdb.service';
 import { rerankWithGemini } from './recommendations.service';
+import { getContentBucket, ContentBucket } from './cold_start_service';
+import { getWatchedCount } from '../shared/user.queries';
+import logger from '../../config/logger';
 
 const CF_SERVICE_URL = process.env.CF_SERVICE_URL ?? 'http://localhost:8000';
 
-const CF_RATIO_LOW  = 0.5;   // 25–50 переглянутих
-const CF_RATIO_HIGH = 0.7;   // 50+ переглянутих
 const CANDIDATE_POOL = 40;   // скільки тягнемо з кожного джерела
 
 export interface AlsItem {
   tmdb_id: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
   title: string;
   poster_path: string | null;
   vote_average: number;
@@ -24,7 +26,7 @@ export interface TaggedItem extends AlsItem {
 
 export interface PersonalizedItem {
   tmdb_id: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
   title: string;
   poster_path: string | null;
   vote_average: number;
@@ -50,7 +52,7 @@ interface CfServiceResponse {
 
 export interface CacheRow {
   tmdb_id: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
   title: string | null;
   poster_path: string | null;
   release_year: number | null;
@@ -81,27 +83,13 @@ interface TmdbDiscoverResult {
   }>;
 }
 
-type ContentBucket = 'movie' | 'tv' | 'anime' | 'anime_movie' | 'dorama' | 'animation';
-
-const getContentBucket = (m: { tmdb_id: number; genre: string; media_type: 'movie' | 'tv' }): ContentBucket => {
-  const g = m.genre.toLowerCase();
-  if (m.media_type === 'tv') {
-    if (g === 'anime') return 'anime';
-    if (g === 'k-drama') return 'dorama';
-    return 'tv';
-  }
-  if (g === 'anime') return 'anime_movie';
-  if (g === 'animation') return 'animation';
-  return 'movie';
-};
-
 interface UserProfile {
   topGenreIds: number[];
   topActorId: number | null;
   allowedBuckets: Set<ContentBucket>; 
 }
 
-export const mediaTypeFromTmdb = (d: { title?: string; name?: string }): 'movie' | 'tv' =>
+export const mediaTypeFromTmdb = (d: { title?: string; name?: string }): MediaType =>
   !!d.title ? 'movie' : 'tv';
 
 export const releaseYearFromTmdb = (d: { release_date?: string; first_air_date?: string }): number | null => {
@@ -124,7 +112,10 @@ export const filterValidItems = (ids: number[], cacheMap: Map<number, CacheRow>)
   const result: AlsItem[] = [];
   for (const id of ids) {
     const cached = cacheMap.get(id);
-    if (!cached || !cached.title) continue;
+    if (!cached || !cached.title) {
+      logger.warn({ tmdbId: id }, 'filterValidItems: skipping tmdb_id missing from cache or without title');
+      continue;
+    }
     result.push(cacheRowToAlsItem(id, cached));
   }
   return result;
@@ -132,17 +123,6 @@ export const filterValidItems = (ids: number[], cacheMap: Map<number, CacheRow>)
 
 export const sliceToLimit = (items: AlsItem[], limit = 25): AlsItem[] =>
   items.slice(0, limit);
-
-export const getCfRatio = (watchedCount: number): number =>
-  watchedCount >= 50 ? CF_RATIO_HIGH : CF_RATIO_LOW;
-
-const getWatchedCount = async (userId: number): Promise<number> => {
-  const res = await pool.query(
-    `SELECT COUNT(*) FROM user_movie_actions WHERE user_id = $1 AND is_watched = TRUE`,
-    [userId]
-  );
-  return Number(res.rows[0].count);
-};
 
 const getExcludedIds = async (userId: number): Promise<Set<number>> => {
   const res = await pool.query(
@@ -236,7 +216,7 @@ const enrichWithDetails = async (tmdbIds: number[]): Promise<AlsItem[]> => {
     const fetchJobs = missingIds.map(id =>
       fetchFromTMDB<TmdbDetails>(`/movie/${id}`)
         .catch(() => fetchFromTMDB<TmdbDetails>(`/tv/${id}`).catch((err) => {
-          console.warn(`[ALS] TMDB details failed for id ${id} (movie+tv):`, err);
+          logger.warn({ err, tmdbId: id }, '[ALS] TMDB details failed (movie and tv)');
           return null;
         }))
     );
@@ -264,7 +244,10 @@ const enrichWithDetails = async (tmdbIds: number[]): Promise<AlsItem[]> => {
   const result: AlsItem[] = [];
   for (const id of tmdbIds) {
     const cached = cacheMap.get(id);
-    if (!cached || !cached.title) continue;
+    if (!cached || !cached.title) {
+      logger.warn({ tmdbId: id }, 'enrichWithDetails: skipping tmdb_id missing from cache or without title');
+      continue;
+    }
     result.push({
       tmdb_id: id,
       media_type: cached.media_type,
@@ -302,28 +285,28 @@ const fetchDiscoverCandidates = async (
     // Звичайні фільми — виключаємо анімацію (16) та ja/ko-мову,
     // щоб аніме/азійський контент не лізли у фільмовий бакет
     if (allowedBuckets.has('movie')) {
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: genreStr, without_genres: '99,16', without_original_language: 'ja,ko', page: '1' }).catch((err) => { console.warn('[ALS] TMDB discover failed, using empty fallback:', err); return { results: [] }; }));
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: genreStr, without_genres: '99,16', without_original_language: 'ja,ko', page: '2' }).catch((err) => { console.warn('[ALS] TMDB discover failed, using empty fallback:', err); return { results: [] }; }));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: genreStr, without_genres: '99,16', without_original_language: 'ja,ko', page: '1' }).catch((err) => { logger.warn({ err }, '[ALS] TMDB discover failed, using empty fallback'); return { results: [] }; }));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: genreStr, without_genres: '99,16', without_original_language: 'ja,ko', page: '2' }).catch((err) => { logger.warn({ err }, '[ALS] TMDB discover failed, using empty fallback'); return { results: [] }; }));
     }
     // Аніме фільми
     if (allowedBuckets.has('anime_movie')) {
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: '16', with_original_language: 'ja', page: '1' }).catch((err) => { console.warn('[ALS] TMDB discover failed, using empty fallback:', err); return { results: [] }; }));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: '16', with_original_language: 'ja', page: '1' }).catch((err) => { logger.warn({ err }, '[ALS] TMDB discover failed, using empty fallback'); return { results: [] }; }));
     }
     // Анімація (не аніме)
     if (allowedBuckets.has('animation')) {
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: '16', without_original_language: 'ja', page: '1' }).catch((err) => { console.warn('[ALS] TMDB discover failed, using empty fallback:', err); return { results: [] }; }));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/movie', { ...baseMovieParams, with_genres: '16', without_original_language: 'ja', page: '1' }).catch((err) => { logger.warn({ err }, '[ALS] TMDB discover failed, using empty fallback'); return { results: [] }; }));
     }
     // Звичайні серіали
     if (allowedBuckets.has('tv')) {
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', { ...baseTvParams, with_genres: genreStr, without_genres: '99,16', without_original_language: 'ja,ko', page: '1' }).catch((err) => { console.warn('[ALS] TMDB discover failed, using empty fallback:', err); return { results: [] }; }));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', { ...baseTvParams, with_genres: genreStr, without_genres: '99,16', without_original_language: 'ja,ko', page: '1' }).catch((err) => { logger.warn({ err }, '[ALS] TMDB discover failed, using empty fallback'); return { results: [] }; }));
     }
     // Аніме серіали
     if (allowedBuckets.has('anime')) {
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', { ...baseTvParams, with_genres: '16', with_original_language: 'ja', page: '1' }).catch((err) => { console.warn('[ALS] TMDB discover failed, using empty fallback:', err); return { results: [] }; }));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', { ...baseTvParams, with_genres: '16', with_original_language: 'ja', page: '1' }).catch((err) => { logger.warn({ err }, '[ALS] TMDB discover failed, using empty fallback'); return { results: [] }; }));
     }
     // Дорама
     if (allowedBuckets.has('dorama')) {
-      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', { ...baseTvParams, with_genres: genreStr, with_original_language: 'ko', page: '1' }).catch((err) => { console.warn('[ALS] TMDB discover failed, using empty fallback:', err); return { results: [] }; }));
+      jobs.push(fetchFromTMDB<TmdbDiscoverResult>('/discover/tv', { ...baseTvParams, with_genres: genreStr, with_original_language: 'ko', page: '1' }).catch((err) => { logger.warn({ err }, '[ALS] TMDB discover failed, using empty fallback'); return { results: [] }; }));
     }
   }
 
@@ -335,7 +318,7 @@ const fetchDiscoverCandidates = async (
         ...baseMovieParams,
         with_cast: String(topActorId),
         sort_by: 'popularity.desc',
-      }).catch((err) => { console.warn('[ALS] TMDB discover failed, using empty fallback:', err); return { results: [] }; })
+      }).catch((err) => { logger.warn({ err }, '[ALS] TMDB discover failed, using empty fallback'); return { results: [] }; })
     );
   }
 
@@ -391,31 +374,30 @@ export const getPersonalizedRecommendations = async (
   const excludedIds = await getExcludedIds(userId);
   const profile = await getUserProfile(userId);
 
-  console.log(`\n${'═'.repeat(60)}`);
-  console.log(`[Personalized] User ${userId} | watched: ${watchedCount} | CF ratio: ${getCfRatio(watchedCount) * 100}%`);
-  console.log(`[Personalized] Profile → genres: [${profile.topGenreIds.join(', ')}] | top actor: ${profile.topActorId ?? 'none'}`);
-  console.log(`[Personalized] Allowed buckets: [${[...profile.allowedBuckets].join(', ')}]`);
+  logger.debug(`\n${'═'.repeat(60)}`);
+  logger.debug(`[Personalized] Profile → genres: [${profile.topGenreIds.join(', ')}] | top actor: ${profile.topActorId ?? 'none'}`);
+  logger.debug(`[Personalized] Allowed buckets: [${[...profile.allowedBuckets].join(', ')}]`);
 
   const [alsItems, discoverItems] = await Promise.all([
     fetchAlsTmdbIds(userId, CANDIDATE_POOL)
       .then(async ids => {
-        console.log(`[Personalized] ALS from CF service: ${ids.length} ids (already filtered)`);
+        logger.debug(`[Personalized] ALS from CF service: ${ids.length} ids (already filtered)`);
         return enrichWithDetails(ids);
       })
       .catch(err => {
-        console.error('[Personalized] ALS failed:', err);
+        logger.error({ err, userId }, '[Personalized] ALS failed');
         return [] as AlsItem[];
       }),
     fetchDiscoverCandidates(profile, excludedIds),
   ]);
 
-  console.log(`[Personalized] ALS enriched: ${alsItems.length} | Discover: ${discoverItems.length}`);
+  logger.debug(`[Personalized] ALS enriched: ${alsItems.length} | Discover: ${discoverItems.length}`);
 
   const taggedCandidates = tagCandidates(alsItems, discoverItems, excludedIds);
 
   const alsCount = taggedCandidates.filter(c => c.source === 'als').length;
   const discoverCount = taggedCandidates.filter(c => c.source === 'discover').length;
-  console.log(`[Personalized] Total candidates for Gemini: ${taggedCandidates.length} (ALS: ${alsCount}, Discover: ${discoverCount})`);
+  logger.debug(`[Personalized] Total candidates for Gemini: ${taggedCandidates.length} (ALS: ${alsCount}, Discover: ${discoverCount})`);
 
   const result = await rerankWithGemini(userId, taggedCandidates, watchedCount);
 

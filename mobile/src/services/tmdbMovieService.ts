@@ -1,20 +1,10 @@
-import api from './api';
+import { fetchTMDB } from './tmdbClient';
 import {
   MovieDetails, MovieCredits, MovieImagesResponse,
   MovieVideosResponse, SimilarMovie,
 } from '../types/movie.types';
+import { TMDBResponse } from '../types/tmdb.types';
 
-interface TMDBResponse<T> {
-  results: T[];
-}
-
-const fetchTMDB = async <T>(
-  endpoint: string,
-  params?: Record<string, string | number>,
-): Promise<T> => {
-  const response = await api.get<T>(`/tmdb${endpoint}`, { params });
-  return response.data;
-};
 
 export const tmdbMovieService = {
   getMovieDetails: (movieId: number) =>
@@ -34,7 +24,4 @@ export const tmdbMovieService = {
 
   getRecommendations: (movieId: number) =>
     fetchTMDB<TMDBResponse<SimilarMovie>>(`/movie/${movieId}/recommendations`),
-
-  getExternalIds: (movieId: number) =>
-    fetchTMDB<{ imdb_id: string | null }>(`/movie/${movieId}/external_ids`),
 };

@@ -18,6 +18,7 @@ def get_connection():
         dbname=os.getenv("DB_NAME"),
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),
+        sslmode="require" if os.getenv("DB_SSL") == "true" else "disable",
     )
 
 
@@ -191,14 +192,11 @@ CLUSTER_AFFINITY = {
 
 def get_all_user_ids(conn):
     cur = conn.cursor()
-    placeholders = ','.join(['%s'] * len(PROTECTED_USER_IDS))
-    query = f"""
-        SELECT id FROM users 
-        WHERE account_status = 'active' 
-          AND id NOT IN ({placeholders})
+    cur.execute("""
+        SELECT id FROM users
+        WHERE account_status = 'active'
         ORDER BY id
-    """
-    cur.execute(query, tuple(PROTECTED_USER_IDS))
+    """)
     users = [row[0] for row in cur.fetchall()]
     cur.close()
     return users
@@ -214,14 +212,14 @@ def clear_user_data(conn, user_id):
 def add_rating(conn, user_id, tmdb_id, rating, is_disliked=False):
     cur = conn.cursor()
     is_favorite = rating >= 9 and not is_disliked
-    is_watched = not is_disliked  
+    is_watched = not is_disliked
 
     cur.execute("""
-        INSERT INTO user_movie_actions 
+        INSERT INTO user_movie_actions
             (user_id, tmdb_id, is_watched, is_favorite, is_disliked, updated_at)
         VALUES (%s, %s, %s, %s, %s, NOW())
         ON CONFLICT (user_id, tmdb_id) DO UPDATE
-        SET is_watched = EXCLUDED.is_watched, 
+        SET is_watched = EXCLUDED.is_watched,
             is_favorite = EXCLUDED.is_favorite,
             is_disliked = EXCLUDED.is_disliked,
             updated_at = NOW()
@@ -296,7 +294,7 @@ if __name__ == "__main__":
 
     confirm = input("\n Old points will be deleted. Continue? (yes/no): ")
     if confirm.lower() != "yes":
-        print("Super")
+        print("Cancelled")
         conn.close()
         exit()
 
@@ -330,7 +328,7 @@ if __name__ == "__main__":
             n = random.randint(1, 3)
             picked = pick_movies_from_cluster(cluster, n, rated_ids)
             for tid, title, pop in picked:
-                if random.random() < 0.4: 
+                if random.random() < 0.4:
                     add_rating(conn, user_id, tid, 0, is_disliked=True)
                 else:
                     rating = random.choices([1, 2, 3, 4, 5], k=1)[0]

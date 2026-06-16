@@ -9,7 +9,8 @@ import {
   getBestActorVote, upsertBestActorVote,
   resetAllRatings,
 } from './movie.service';
-import { cacheMediaIfNeeded } from '../tmdb_cache/tmdb_cache.service';
+import { fireAndCacheMedia } from '../tmdb_cache/tmdb_cache.service';
+import logger from '../../config/logger';
 
 export const getActions = async (req: AuthRequest, res: Response) => {
   try {
@@ -18,7 +19,7 @@ export const getActions = async (req: AuthRequest, res: Response) => {
     const data = await getMovieActions(req.userId!, tmdbId);
     res.json(data);
   } catch (err) {
-    console.error('getActions error:', err);
+    logger.error({ err }, 'getActions failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -30,14 +31,12 @@ export const toggleAction = async (req: AuthRequest, res: Response) => {
     const finalMediaType = media_type ?? 'movie';
     const data = await toggleMovieAction(req.userId!, { tmdb_id, action, media_type: finalMediaType });
     
-    cacheMediaIfNeeded(tmdb_id, finalMediaType).catch((err) => {
-      console.error('cacheMediaIfNeeded failed for', tmdb_id, finalMediaType, err);
-    });
+    fireAndCacheMedia(tmdb_id, finalMediaType);
 
 
     res.json(data);
   } catch (err) {
-    console.error('toggleAction error:', err);
+    logger.error({ err }, 'toggleAction failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -50,7 +49,7 @@ export const fetchListItems = async (req: AuthRequest, res: Response) => {
     res.json({ items });
   } catch (err: any) {
     if (err.message === 'List not found or not yours') { res.status(404).json({ error: err.message }); return; }
-    console.error('fetchListItems error:', err);
+    logger.error({ err }, 'fetchListItems failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -60,7 +59,7 @@ export const getLists = async (req: AuthRequest, res: Response) => {
     const lists = await getUserCustomLists(req.userId!);
     res.json({ lists });
   } catch (err) {
-    console.error('getLists error:', err);
+    logger.error({ err }, 'getLists failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -72,15 +71,13 @@ export const addToList = async (req: AuthRequest, res: Response) => {
     const finalMediaType = media_type ?? 'movie';
     await addToCustomList(req.userId!, { list_id, tmdb_id, media_type: finalMediaType });
 
-    cacheMediaIfNeeded(tmdb_id, finalMediaType).catch((err) => {
-      console.error('cacheMediaIfNeeded failed for', tmdb_id, finalMediaType, err);
-    });
+    fireAndCacheMedia(tmdb_id, finalMediaType);
 
 
     res.status(201).json({ message: 'Added to list' });
   } catch (err: any) {
     if (err.message === 'List not found or not yours') { res.status(404).json({ error: err.message }); return; }
-    console.error('addToList error:', err);
+    logger.error({ err }, 'addToList failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -97,7 +94,7 @@ export const removeFromList = async (req: AuthRequest, res: Response) => {
     res.json({ message: 'Removed from list', list_type, actions });
   } catch (err: any) {
     if (err.message === 'List not found or not yours') { res.status(404).json({ error: err.message }); return; }
-    console.error('removeFromList error:', err);
+    logger.error({ err }, 'removeFromList failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -109,26 +106,26 @@ export const getMyRating = async (req: AuthRequest, res: Response) => {
     const data = await getRating(req.userId!, tmdbId);
     res.json(data);
   } catch (err) {
-    console.error('getMyRating error:', err);
+    logger.error({ err }, 'getMyRating failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
 
 export const saveRating = async (req: AuthRequest, res: Response) => {
   try {
-    const { tmdb_id, overall_rating, director_score, effects_score, script_score, music_score, acting_score, media_type } = req.body;
+    const { tmdb_id, overall_rating, director_score, effects_score, script_score, music_score, acting_score, media_type, is_episode } = req.body;
     if (!tmdb_id) { res.status(400).json({ error: 'tmdb_id required' }); return; }
     const data = await upsertRating(req.userId!, {
-      tmdb_id, overall_rating, director_score, effects_score, script_score, music_score, acting_score,
+      tmdb_id, overall_rating, director_score, effects_score, script_score, music_score, acting_score, is_episode,
     });
 
-    cacheMediaIfNeeded(tmdb_id, media_type ?? 'movie').catch((err) => {
-      console.error('cacheMediaIfNeeded failed for', tmdb_id, media_type ?? 'movie', err);
-    });
+    if (!is_episode) {
+      fireAndCacheMedia(tmdb_id, media_type ?? 'movie');
+    }
 
     res.json(data);
   } catch (err) {
-    console.error('saveRating error:', err);
+    logger.error({ err }, 'saveRating failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -140,7 +137,7 @@ export const getMyMood = async (req: AuthRequest, res: Response) => {
     const mood = await getMood(req.userId!, tmdbId);
     res.json({ mood });
   } catch (err) {
-    console.error('getMyMood error:', err);
+    logger.error({ err }, 'getMyMood failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -151,13 +148,11 @@ export const saveMood = async (req: AuthRequest, res: Response) => {
     if (!tmdb_id || !mood) { res.status(400).json({ error: 'tmdb_id and mood required' }); return; }
     const saved = await upsertMood(req.userId!, { tmdb_id, mood });
 
-    cacheMediaIfNeeded(tmdb_id, media_type ?? 'movie').catch((err) => {
-      console.error('cacheMediaIfNeeded failed for', tmdb_id, media_type ?? 'movie', err);
-    });
+    fireAndCacheMedia(tmdb_id, media_type ?? 'movie');
 
     res.json({ mood: saved });
   } catch (err) {
-    console.error('saveMood error:', err);
+    logger.error({ err }, 'saveMood failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -170,7 +165,7 @@ export const fetchComments = async (req: AuthRequest, res: Response) => {
     const comments = await getComments(req.userId!, tmdbId, page);
     res.json({ comments });
   } catch (err) {
-    console.error('fetchComments error:', err);
+    logger.error({ err }, 'fetchComments failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -183,7 +178,7 @@ export const postComment = async (req: AuthRequest, res: Response) => {
     const comment = await createComment(req.userId!, { tmdb_id, comment_text, is_anonymous, has_spoiler });
     res.status(201).json({ comment });
   } catch (err) {
-    console.error('postComment error:', err);
+    logger.error({ err }, 'postComment failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -198,7 +193,7 @@ export const editComment = async (req: AuthRequest, res: Response) => {
     if (!comment) { res.status(404).json({ error: 'Comment not found or not yours' }); return; }
     res.json({ comment });
   } catch (err) {
-    console.error('editComment error:', err);
+    logger.error({ err }, 'editComment failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -211,7 +206,7 @@ export const removeComment = async (req: AuthRequest, res: Response) => {
     if (!deleted) { res.status(404).json({ error: 'Comment not found or not yours' }); return; }
     res.json({ message: 'Comment deleted' });
   } catch (err) {
-    console.error('removeComment error:', err);
+    logger.error({ err }, 'removeComment failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -224,7 +219,7 @@ export const reactToComment = async (req: AuthRequest, res: Response) => {
     const data = await toggleCommentLike(req.userId!, commentId, is_like);
     res.json(data);
   } catch (err) {
-    console.error('reactToComment error:', err);
+    logger.error({ err }, 'reactToComment failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -236,7 +231,7 @@ export const getMyBestActor = async (req: AuthRequest, res: Response) => {
     const data = await getBestActorVote(req.userId!, tmdbId);
     res.json(data ?? { actor_tmdb_id: null, actor_name: null });
   } catch (err) {
-    console.error('getMyBestActor error:', err);
+    logger.error({ err }, 'getMyBestActor failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -247,14 +242,12 @@ export const voteBestActor = async (req: AuthRequest, res: Response) => {
     if (!tmdb_id || !actor_tmdb_id || !actor_name) { res.status(400).json({ error: 'tmdb_id, actor_tmdb_id and actor_name required' }); return; }
     const data = await upsertBestActorVote(req.userId!, { tmdb_id, actor_tmdb_id, actor_name });
 
-    cacheMediaIfNeeded(tmdb_id, media_type ?? 'movie').catch((err) => {
-      console.error('cacheMediaIfNeeded failed for', tmdb_id, media_type ?? 'movie', err);
-    });
+    fireAndCacheMedia(tmdb_id, media_type ?? 'movie');
 
 
     res.json(data);
   } catch (err) {
-    console.error('voteBestActor error:', err);
+    logger.error({ err }, 'voteBestActor failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -266,7 +259,7 @@ export const resetMyRatings = async (req: AuthRequest, res: Response) => {
     await resetAllRatings(req.userId!, tmdbId);
     res.json({ message: 'Ratings reset' });
   } catch (err) {
-    console.error('resetMyRatings error:', err);
+    logger.error({ err }, 'resetMyRatings failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };

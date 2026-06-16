@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Modal,
+  View, Text, TouchableOpacity, Modal,
   FlatList, Pressable, ActivityIndicator,
 } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { COLORS } from '../../constants/colors';
-import { FONTS } from '../../constants/fonts';
 import { MovieActions, UserList } from '../../types/movie.types';
 import { movieService } from '../../services/movieService';
+import { CustomAlert } from '../ui/CustomAlert';
+import { MediaType } from '../../types/tmdb.types';
+import { styles } from './MovieActions.styles';
 
 const HeartIcon: React.FC<{ filled: boolean; size?: number }> = ({ filled, size = 26 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -64,7 +66,7 @@ const ListIcon: React.FC<{ active: boolean; size?: number }> = ({ active, size =
 
 interface Props {
   tmdbId: number;
-  mediaType?: 'movie' | 'tv';
+  mediaType?: MediaType;
   actions: MovieActions;
   lists: UserList[];
   onActionsChange: (actions: MovieActions) => void;
@@ -77,12 +79,32 @@ export const MovieActionsBar: React.FC<Props> = ({
   const [loading, setLoading] = useState<string | null>(null);
   const [listModal, setListModal] = useState(false);
   const [listLoading, setListLoading] = useState<number | null>(null);
+  const [seriesWatchedPrompt, setSeriesWatchedPrompt] = useState(false);
 
   const [addedToLists, setAddedToLists] = useState<Set<number>>(new Set());
   const [listsChecked, setListsChecked] = useState(false);
 
   const customLists = lists.filter(l => l.list_type === 'custom');
   const hasAnyListAdded = addedToLists.size > 0;
+
+  const handleMarkAllEpisodes = async () => {
+    setSeriesWatchedPrompt(false);
+    setLoading('watched');
+    try {
+      await movieService.markAllEpisodesWatched(tmdbId);
+      const updated = await movieService.getActions(tmdbId);
+      onActionsChange(updated);
+    } catch (e) {
+      console.error('markAllEpisodes error:', e);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleSeriesWatchedOnly = () => {
+    setSeriesWatchedPrompt(false);
+    toggle('watched');
+  };
 
   // Завантажу стан при відкритті модалки і lazy - тільки коли потрібно
   const checkLists = async () => {
@@ -180,7 +202,13 @@ export const MovieActionsBar: React.FC<Props> = ({
 
         <TouchableOpacity
           style={[styles.watchBtn, actions.is_watched && styles.watchBtnActive]}
-          onPress={() => toggle('watched')}
+          onPress={() => {
+            if (mediaType === 'tv' && !actions.is_watched) {
+              setSeriesWatchedPrompt(true);
+            } else {
+              toggle('watched');
+            }
+          }}
           activeOpacity={0.7}
           disabled={loading === 'watched'}
         >
@@ -293,108 +321,16 @@ export const MovieActionsBar: React.FC<Props> = ({
           </Pressable>
         </Pressable>
       </Modal>
+
+      <CustomAlert
+        visible={seriesWatchedPrompt}
+        title="Mark all episodes?"
+        message="Do you want to mark all episodes of this series as watched too?"
+        confirmText="Yes, all episodes"
+        cancelText="Just the series"
+        onConfirm={handleMarkAllEpisodes}
+        onCancel={handleSeriesWatchedOnly}
+      />
     </>
   );
 };
-
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 6,
-  },
-
-  iconBtn: { alignItems: 'center', gap: 4, minWidth: 52 },
-  iconLabel: {
-    fontFamily: FONTS.regular,
-    fontSize: 10,
-    color: '#555',
-    textAlign: 'center',
-  },
-  iconLabelPink: { color: COLORS.pink },
-  iconLabelGold: { color: COLORS.gold },
-
-  watchBtn: {
-    flex: 1,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: '#555',
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-  },
-  watchBtnActive: {
-    backgroundColor: COLORS.gold,
-    borderColor: COLORS.gold,
-  },
-  watchBtnText: {
-    fontFamily: FONTS.semiBold,
-    fontSize: 13,
-    color: '#aaa',
-  },
-  watchBtnTextActive: { color: COLORS.background },
-
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalCard: {
-    backgroundColor: COLORS.cardBg,
-    borderRadius: 16,
-    borderWidth: 0.5,
-    borderColor: '#222',
-    width: '100%',
-    maxWidth: 360,
-    overflow: 'hidden',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 18,
-    borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.cardDark,
-  },
-  modalTitle: { fontFamily: FONTS.semiBold, fontSize: 16, color: COLORS.white },
-  modalClose: { fontSize: 18, color: COLORS.cardTextLight, paddingHorizontal: 4 },
-  modalLoader: { paddingVertical: 32, alignItems: 'center' },
-
-  listItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#1a1a1a',
-  },
-  listItemAdded: { backgroundColor: 'rgba(255,215,0,0.05)' },
-  listItemLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  listItemName: { fontFamily: FONTS.medium, fontSize: 14, color: COLORS.white },
-  listItemNameAdded: { color: COLORS.gold },
-  privateBadge: { fontSize: 12 },
-
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  badgeAdded: {
-    backgroundColor: 'rgba(255,215,0,0.12)',
-    borderColor: COLORS.gold,
-  },
-  badgeText: {
-    fontFamily: FONTS.medium,
-    fontSize: 11,
-    color: COLORS.gray,
-  },
-  badgeTextAdded: { color: COLORS.gold },
-});

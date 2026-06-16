@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import {
   View, Text, Image, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
-import { COLORS } from '../../../constants/colors';
-import { POSTER_SIZES } from '../../../constants/tmdb';
-import { followsService } from '../../../services/followsService';
-import { tmdbMovieService } from '../../../services/tmdbMovieService';
-import { tmdbSeriesService } from '../../../services/tmdbSeriesService';
+import { COLORS } from '../../constants/colors';
+import { POSTER_SIZES } from '../../constants/tmdb';
+import { followsService } from '../../services/followsService';
+import { movieService } from '../../services/movieService';
 import { styles, GRID_CONFIG } from './PublicListGrid.styles';
+import { MediaType } from '../../types/tmdb.types';
 
 interface MediaMeta {
   tmdb_id: number;
@@ -15,14 +15,14 @@ interface MediaMeta {
   poster_path: string | null;
   release_date: string;
   vote_average: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
 }
 
 interface Props {
   userId: number;
   listId: number | null;
   listType: string;
-  onItemPress: (tmdbId: number, mediaType: 'movie' | 'tv') => void;
+  onItemPress: (tmdbId: number, mediaType: MediaType) => void;
 }
 
 export const PublicListGrid: React.FC<Props> = ({ userId, listId, listType, onItemPress }) => {
@@ -41,43 +41,23 @@ export const PublicListGrid: React.FC<Props> = ({ userId, listId, listType, onIt
       const data = await followsService.getUserListItems(userId, listId);
       const sliced = data.slice(0, 30);
 
-      const metas = await Promise.allSettled(
-        sliced.map(async (i): Promise<MediaMeta> => {
-          if (i.media_type === 'tv') {
-            const d = await tmdbSeriesService.getSeriesDetails(i.tmdb_id);
-            return {
-              tmdb_id: d.id,
-              title: d.name,
-              poster_path: d.poster_path,
-              release_date: d.first_air_date,
-              vote_average: d.vote_average,
-              media_type: 'tv',
-            };
-          } else {
-            const d = await tmdbMovieService.getMovieDetails(i.tmdb_id);
-            return {
-              tmdb_id: d.id,
-              title: d.title,
-              poster_path: d.poster_path,
-              release_date: d.release_date,
-              vote_average: d.vote_average,
-              media_type: 'movie',
-            };
-          }
-        })
+      const batch = await movieService.getBatchDetails(
+        sliced.map(i => ({
+          tmdb_id: i.tmdb_id,
+          media_type: (i.media_type as MediaType) ?? 'movie',
+        })),
       );
 
-      const loaded: MediaMeta[] = metas.map((r, idx) => {
-        if (r.status === 'fulfilled') return r.value;
-        return {
-          tmdb_id: sliced[idx].tmdb_id,
-          title: 'Unknown',
-          poster_path: null,
-          release_date: '',
-          vote_average: 0,
-          media_type: sliced[idx].media_type as 'movie' | 'tv',
-        };
-      });
+      const loaded: MediaMeta[] = batch
+        .filter((m): m is MediaMeta => m.title !== null)
+        .map(m => ({
+          tmdb_id: m.tmdb_id,
+          title: m.title as string,
+          poster_path: m.poster_path,
+          release_date: m.release_date,
+          vote_average: m.vote_average,
+          media_type: m.media_type,
+        }));
 
       setItems(loaded);
     } catch (e) {

@@ -1,12 +1,11 @@
 import pool from '../../config/database';
+import { fetchFromTMDB } from '../tmdb/tmdb.service';
+import { buildAllEpisodesList, SeasonSummary } from './episode.helpers';
+import { EpisodeWatchInput } from './episode.types';
+import logger from '../../config/logger';
 
-export interface EpisodeWatchInput {
-  series_tmdb_id: number;
-  season_number: number;
-  episode_number: number;
-  episode_tmdb_id?: number;
-  total_episodes_in_series?: number;
-  total_seasons_in_series?: number;
+interface TmdbSeriesDetails {
+  seasons?: SeasonSummary[];
 }
 
 export const getWatchedEpisodes = async (
@@ -19,6 +18,47 @@ export const getWatchedEpisodes = async (
     [userId, seriesTmdbId]
   );
   return result.rows;
+};
+
+const addSeriesToWatched = async (client: any, userId: number, seriesTmdbId: number) => {
+  await client.query(
+    `INSERT INTO user_movie_actions (user_id, tmdb_id, is_watched)
+     VALUES ($1, $2, TRUE)
+     ON CONFLICT (user_id, tmdb_id) DO UPDATE
+       SET is_watched = TRUE, updated_at = NOW()`,
+    [userId, seriesTmdbId]
+  );
+
+  const watchedList = await client.query(
+    `SELECT id FROM user_lists WHERE user_id = $1 AND list_type = 'watched'`,
+    [userId]
+  );
+  if (watchedList.rows.length > 0) {
+    await client.query(
+      `INSERT INTO list_items (list_id, tmdb_id, media_type) VALUES ($1, $2, 'tv')
+       ON CONFLICT DO NOTHING`,
+      [watchedList.rows[0].id, seriesTmdbId]
+    );
+  }
+
+  await client.query(
+    `UPDATE users SET series_watched = (
+       SELECT COUNT(DISTINCT li.tmdb_id)
+       FROM list_items li
+       JOIN user_lists ul ON ul.id = li.list_id
+       WHERE ul.user_id = $1 AND ul.list_type = 'watched' AND li.media_type = 'tv'
+     ), updated_at = NOW() WHERE id = $1`,
+    [userId]
+  );
+};
+
+const recountEpisodesWatched = async (client: any, userId: number) => {
+  await client.query(
+    `UPDATE users SET episodes_watched = (
+       SELECT COUNT(*) FROM user_episode_watches WHERE user_id = $1
+     ), updated_at = NOW() WHERE id = $1`,
+    [userId]
+  );
 };
 
 export const toggleEpisodeWatch = async (
@@ -64,51 +104,68 @@ export const toggleEpisodeWatch = async (
     );
     const episodes_watched_count = Number(countResult.rows[0].cnt);
 
-    // я тут оновлюю лічильник скільки юзер подивився епізодів
-    await client.query(
-      `UPDATE users SET episodes_watched = (
-         SELECT COUNT(*) FROM user_episode_watches WHERE user_id = $1
-       ), updated_at = NOW() WHERE id = $1`,
-      [userId]
-    );
+    await recountEpisodesWatched(client, userId);
 
-    if (is_watched && input.total_episodes_in_series) {
-      if (episodes_watched_count >= input.total_episodes_in_series) {
-        await client.query(
-          `INSERT INTO user_movie_actions (user_id, tmdb_id, is_watched)
-           VALUES ($1, $2, TRUE)
-           ON CONFLICT (user_id, tmdb_id) DO UPDATE
-             SET is_watched = TRUE, updated_at = NOW()`,
-          [userId, series_tmdb_id]
-        );
-        const watchedList = await client.query(
-          `SELECT id FROM user_lists WHERE user_id = $1 AND list_type = 'watched'`, [userId]
-        );
-        if (watchedList.rows.length > 0) {
-          await client.query(
-            `INSERT INTO list_items (list_id, tmdb_id, media_type) VALUES ($1, $2, 'tv')
-             ON CONFLICT DO NOTHING`,
-            [watchedList.rows[0].id, series_tmdb_id]
-          );
-        }
-        await client.query(
-          `UPDATE users SET series_watched = (
-             SELECT COUNT(DISTINCT tmdb_id) FROM user_movie_actions
-             WHERE user_id = $1 AND is_watched = TRUE
-             AND tmdb_id IN (
-               SELECT DISTINCT series_tmdb_id FROM user_episode_watches WHERE user_id = $1
-             )
-           ), updated_at = NOW() WHERE id = $1`,
-          [userId]
-        );
-      }
+    // якщо хочаб один епізод переглянути то серіал у вотчед
+    if (is_watched && episodes_watched_count >= 1) {
+      await addSeriesToWatched(client, userId, series_tmdb_id);
     }
 
     await client.query('COMMIT');
     return { is_watched, episodes_watched_count };
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('toggleEpisodeWatch failed for user', userId, 'series', series_tmdb_id, error);
+    logger.error({ err: error, userId, seriesTmdbId: series_tmdb_id }, 'toggleEpisodeWatch failed');
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+export const markAllEpisodesWatched = async (
+  userId: number, seriesTmdbId: number
+): Promise<{ episodes_added: number; episodes_watched_count: number }> => {
+  const details = await fetchFromTMDB<TmdbSeriesDetails>(`/tv/${seriesTmdbId}`);
+  const allEpisodes = buildAllEpisodesList(details.seasons ?? []);
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (allEpisodes.length > 0) {
+      const values: number[] = [];
+      const rows = allEpisodes.map(({ season, episode }, i) => {
+        const offset = i * 4;
+        values.push(userId, seriesTmdbId, season, episode);
+        return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4})`;
+      });
+
+      await client.query(
+        `INSERT INTO user_episode_watches
+           (user_id, series_tmdb_id, season_number, episode_number)
+         VALUES ${rows.join(', ')}
+         ON CONFLICT DO NOTHING`,
+        values
+      );
+    }
+
+    await addSeriesToWatched(client, userId, seriesTmdbId);
+    await recountEpisodesWatched(client, userId);
+
+    const countResult = await client.query(
+      `SELECT COUNT(*) AS cnt FROM user_episode_watches
+       WHERE user_id = $1 AND series_tmdb_id = $2`,
+      [userId, seriesTmdbId]
+    );
+
+    await client.query('COMMIT');
+    return {
+      episodes_added: allEpisodes.length,
+      episodes_watched_count: Number(countResult.rows[0].cnt),
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error({ err: error, userId, seriesTmdbId }, 'markAllEpisodesWatched failed');
     throw error;
   } finally {
     client.release();

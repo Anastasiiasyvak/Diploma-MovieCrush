@@ -1,4 +1,4 @@
-import { determineCinemaVibe, calculateTimeStats, calculateFanPercentile } from '../modules/wrapped/wrapped.service';
+import { determineCinemaVibe, calculateTimeStats, calculateFanPercentile } from './wrapped.service';
 
 describe('determineCinemaVibe', () => {
 

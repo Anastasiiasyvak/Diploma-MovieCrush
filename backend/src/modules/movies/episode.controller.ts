@@ -3,8 +3,10 @@ import { AuthRequest } from '../../middleware/auth.middleware';
 import {
   getWatchedEpisodes,
   toggleEpisodeWatch,
+  markAllEpisodesWatched,
 } from './episode.service';
-import { cacheMediaIfNeeded } from '../tmdb_cache/tmdb_cache.service';
+import { fireAndCacheMedia } from '../tmdb_cache/tmdb_cache.service';
+import logger from '../../config/logger';
 
 export const fetchWatchedEpisodes = async (req: AuthRequest, res: Response) => {
   try {
@@ -13,7 +15,7 @@ export const fetchWatchedEpisodes = async (req: AuthRequest, res: Response) => {
     const episodes = await getWatchedEpisodes(req.userId!, seriesTmdbId);
     res.json({ episodes });
   } catch (err) {
-    console.error('fetchWatchedEpisodes error:', err);
+    logger.error({ err }, 'fetchWatchedEpisodes failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -34,15 +36,31 @@ export const toggleEpisode = async (req: AuthRequest, res: Response) => {
       series_tmdb_id, season_number, episode_number,
       episode_tmdb_id, total_episodes_in_series, total_seasons_in_series,
     });
-    
-    cacheMediaIfNeeded(series_tmdb_id, 'tv').catch((err) => {
-      console.error('cacheMediaIfNeeded failed for series', series_tmdb_id, err);
-    });
 
+    fireAndCacheMedia(series_tmdb_id, 'tv');
 
     res.json(result);
   } catch (err) {
-    console.error('toggleEpisode error:', err);
+    logger.error({ err }, 'toggleEpisode failed');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const markAllEpisodes = async (req: AuthRequest, res: Response) => {
+  try {
+    const { series_tmdb_id } = req.body;
+    if (!series_tmdb_id) {
+      res.status(400).json({ error: 'series_tmdb_id required' });
+      return;
+    }
+
+    const result = await markAllEpisodesWatched(req.userId!, series_tmdb_id);
+
+    fireAndCacheMedia(series_tmdb_id, 'tv');
+
+    res.json(result);
+  } catch (err) {
+    logger.error({ err }, 'markAllEpisodes failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };

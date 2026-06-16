@@ -1,3 +1,5 @@
+import { MediaType } from "./tmdb.types";
+
 export type MoodType =
   | 'happy' | 'inspired' | 'scared' | 'sad'
   | 'thoughtful' | 'bored' | 'excited'
@@ -22,6 +24,15 @@ export interface MovieDetails {
   budget: number;
   revenue: number;
   imdb_id: string | null;
+}
+
+export interface BatchMediaMeta {
+  tmdb_id: number;
+  title: string | null;
+  poster_path: string | null;
+  release_date: string;
+  vote_average: number;
+  media_type: MediaType;
 }
 
 export interface MovieCredits {
@@ -113,7 +124,9 @@ export interface MovieComment {
 
 export interface UserList {
   id: number;
+  user_id: number;
+  list_type: 'favorites' | 'watched' | 'watchlist' | 'custom';
   name: string;
-  list_type: string;
   is_private: boolean;
+  created_at: string;
 }

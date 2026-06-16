@@ -4,7 +4,6 @@ export interface SimilarityBreakdown {
   genre_similarity: number;
   actor_similarity: number;
   mood_similarity: number;
-  director_similarity: number;
   disliked_similarity: number;
 }
 
@@ -25,7 +24,6 @@ export interface SoulmateResponse {
     genre: number;
     actor: number;
     mood: number;
-    director: number;
     disliked: number;
   };
 

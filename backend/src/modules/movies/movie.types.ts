@@ -1,3 +1,5 @@
+import { MediaType } from "../shared/user.types";
+
 export type MoodType =
   | 'happy' | 'inspired' | 'scared' | 'sad'
   | 'thoughtful' | 'bored' | 'excited'
@@ -13,13 +15,13 @@ export interface MovieActionsResponse {
 export interface ToggleActionInput {
   tmdb_id: number;
   action: 'favorite' | 'watchlist' | 'watched' | 'dislike';
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
 }
 
 export interface AddToListInput {
   tmdb_id: number;
   list_id: number;
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
 }
 
 export interface DetailedRatingInput {
@@ -30,6 +32,7 @@ export interface DetailedRatingInput {
   script_score?: number;
   music_score?: number;
   acting_score?: number;
+  is_episode?: boolean;
 }
 
 export interface DetailedRatingResponse {

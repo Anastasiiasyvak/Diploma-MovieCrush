@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.middleware';
 import { createCustomList, deleteCustomList, toggleListPrivacy } from './lists.service';
+import logger from '../../config/logger';
 
 export const createList = async (req: AuthRequest, res: Response) => {
   try {
@@ -10,7 +11,7 @@ export const createList = async (req: AuthRequest, res: Response) => {
     const list = await createCustomList(req.userId!, name, is_private ?? false);
     res.status(201).json({ list });
   } catch (err) {
-    console.error('Create list error:', err);
+    logger.error({ err, userId: req.userId }, 'Create list failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -23,7 +24,7 @@ export const deleteList = async (req: AuthRequest, res: Response) => {
     if (!deleted) { res.status(404).json({ error: 'List not found or not yours' }); return; }
     res.status(200).json({ message: 'List deleted' });
   } catch (err) {
-    console.error('Delete list error:', err);
+    logger.error({ err, userId: req.userId }, 'Delete list failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -38,7 +39,7 @@ export const patchList = async (req: AuthRequest, res: Response) => {
     if (!list) { res.status(404).json({ error: 'List not found or not yours' }); return; }
     res.status(200).json({ list });
   } catch (err) {
-    console.error('Patch list error:', err);
+    logger.error({ err, userId: req.userId }, 'Patch list failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };

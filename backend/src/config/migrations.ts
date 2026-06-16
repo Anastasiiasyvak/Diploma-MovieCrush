@@ -1,4 +1,5 @@
 import pool from './database';
+import logger from './logger';
 
 const createTables = async () => {
   try {
@@ -36,17 +37,7 @@ const createTables = async () => {
         subscription_ends_at TIMESTAMP
       );
     `);
-    console.log('Table users ready');
-
-    await pool.query(`
-      ALTER TABLE users
-        ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE,
-        ADD COLUMN IF NOT EXISTS verification_token VARCHAR(64),
-        ADD COLUMN IF NOT EXISTS verification_token_expires_at TIMESTAMP,
-        ADD COLUMN IF NOT EXISTS reset_token VARCHAR(64),
-        ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMP;
-    `);
-    console.log('Email verification + reset columns ready');
+    logger.info('Table users ready');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS user_lists (
@@ -57,13 +48,13 @@ const createTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log('Table user_lists ready');
+    logger.info('Table user_lists ready');
 
     await pool.query(`
       ALTER TABLE user_lists
         ADD COLUMN IF NOT EXISTS is_private BOOLEAN DEFAULT FALSE;
     `);
-    console.log('is_private column ready');
+    logger.info('is_private column ready');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS list_items (
@@ -75,7 +66,7 @@ const createTables = async () => {
         UNIQUE (list_id, tmdb_id, media_type)
       );
     `);
-    console.log('Table list_items ready');
+    logger.info('Table list_items ready');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS user_movie_actions (
@@ -91,7 +82,7 @@ const createTables = async () => {
         UNIQUE (user_id, tmdb_id)
       );
     `);
-    console.log('Table user_movie_actions ready');
+    logger.info('Table user_movie_actions ready');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS user_detailed_ratings (
@@ -109,7 +100,7 @@ const createTables = async () => {
         UNIQUE (user_id, tmdb_id)
       );
     `);
-    console.log('Table user_detailed_ratings ready');
+    logger.info('Table user_detailed_ratings ready');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS user_movie_moods (
@@ -124,7 +115,7 @@ const createTables = async () => {
         UNIQUE (user_id, tmdb_id)
       );
     `);
-    console.log('Table user_movie_moods ready');
+    logger.info('Table user_movie_moods ready');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS comments (
@@ -141,7 +132,7 @@ const createTables = async () => {
         updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log('Table comments ready');
+    logger.info('Table comments ready');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS comment_likes (
@@ -153,7 +144,7 @@ const createTables = async () => {
         UNIQUE (user_id, comment_id)
       );
     `);
-    console.log('Table comment_likes ready');
+    logger.info('Table comment_likes ready');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS user_best_actor_votes (
@@ -166,38 +157,7 @@ const createTables = async () => {
         UNIQUE (user_id, tmdb_id)
       );
     `);
-    console.log('Table user_best_actor_votes ready');
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS user_yearly_stats (
-        id                   BIGSERIAL PRIMARY KEY,
-        user_id              BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        year                 INT NOT NULL,
-        movies_watched       INT DEFAULT 0,
-        series_watched       INT DEFAULT 0,
-        episodes_watched     INT DEFAULT 0,
-        total_hours          DECIMAL(6,1) DEFAULT 0.0,
-        top_director_tmdb_id INT,
-        top_director_name    VARCHAR(100),
-        top_genre_id         INT,
-        top_genre_name       VARCHAR(50),
-        top_actor_1_tmdb_id  INT,
-        top_actor_1_name     VARCHAR(100),
-        top_actor_2_tmdb_id  INT,
-        top_actor_2_name     VARCHAR(100),
-        top_actor_3_tmdb_id  INT,
-        top_actor_3_name     VARCHAR(100),
-        favorite_movie_tmdb_id INT,
-        favorite_movie_title   VARCHAR(255),
-        most_watched_month     SMALLINT CHECK (most_watched_month BETWEEN 1 AND 12),
-        average_rating         DECIMAL(3,1) DEFAULT 0.0,
-        total_reviews          INT DEFAULT 0,
-        created_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE (user_id, year)
-      );
-    `);
-    console.log('Table user_yearly_stats ready');
+    logger.info('Table user_best_actor_votes ready');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS user_follows (
@@ -215,7 +175,7 @@ const createTables = async () => {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_user_follows_following ON user_follows(following_id);
     `);
-    console.log('Table user_follows ready');
+    logger.info('Table user_follows ready');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS user_soulmate_matches (
@@ -228,7 +188,6 @@ const createTables = async () => {
         genre_similarity DECIMAL(5,4) DEFAULT 0,
         actor_similarity DECIMAL(5,4) DEFAULT 0,
         mood_similarity DECIMAL(5,4) DEFAULT 0,
-        director_similarity DECIMAL(5,4) DEFAULT 0,
         disliked_similarity DECIMAL(5,4) DEFAULT 0,
         shared_movies_count INT DEFAULT 0,
         top_shared_movies BIGINT[] DEFAULT '{}',
@@ -244,7 +203,7 @@ const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_soulmate_user_year
         ON user_soulmate_matches(user_id, wrapped_year);
     `);
-    console.log('Table user_soulmate_matches ready');
+    logger.info('Table user_soulmate_matches ready');
 
     // у мене ця таблиця заповнюється під час дії юзера (наприклад, коли він позначає фільм як 'watched' або ставить рейтинг)
     // і потім використовується для обрахунку аналітики в Wrapped, щоб не робити багато запитів до TMDB API в момент генерації Wrapped
@@ -274,7 +233,7 @@ const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_tmdb_cache_release_year
         ON tmdb_media_cache(release_year);
     `);
-    console.log('Table tmdb_media_cache ready');
+    logger.info('Table tmdb_media_cache ready');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS user_wrapped_summary (
@@ -317,13 +276,7 @@ const createTables = async () => {
         ADD COLUMN IF NOT EXISTS cinema_vibe VARCHAR(50),
         ADD COLUMN IF NOT EXISTS cinema_vibe_stat VARCHAR(200);
     `);
-    console.log('Wrapped: cinema_vibe columns added');
-
-    await pool.query(`
-      ALTER TABLE user_wrapped_summary
-        DROP COLUMN IF EXISTS topfan_series_count;
-    `);
-    console.log('Wrapped: topfan_series_count removed');
+    logger.info('Wrapped: cinema_vibe columns added');
 
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_wrapped_user_year
@@ -333,7 +286,7 @@ const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_wrapped_year_computed
         ON user_wrapped_summary(wrapped_year, computed_at);
     `);
-    console.log('Table user_wrapped_summary ready');
+    logger.info('Table user_wrapped_summary ready');
 
 
     await pool.query(`
@@ -351,9 +304,9 @@ const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_ai_recs_user_expires
         ON user_ai_recommendations(user_id, expires_at DESC);
     `);
-    console.log('Table user_ai_recommendations ready');
+    logger.info('Table user_ai_recommendations ready');
 
-    console.log('Converting tmdb_id columns to BIGINT...');
+    logger.info('Converting tmdb_id columns to BIGINT...');
 
     await pool.query(`ALTER TABLE list_items ALTER COLUMN tmdb_id TYPE BIGINT;`);
     await pool.query(`ALTER TABLE user_movie_actions ALTER COLUMN tmdb_id TYPE BIGINT;`);
@@ -362,7 +315,7 @@ const createTables = async () => {
     await pool.query(`ALTER TABLE comments ALTER COLUMN tmdb_id TYPE BIGINT;`);
     await pool.query(`ALTER TABLE user_best_actor_votes ALTER COLUMN tmdb_id TYPE BIGINT;`);
 
-    console.log('All tmdb_id columns successfully converted to BIGINT');
+    logger.info('All tmdb_id columns successfully converted to BIGINT');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS onboarding_actors (
@@ -373,7 +326,7 @@ const createTables = async () => {
         known_for VARCHAR(255)
       );
     `);
-    console.log('Table onboarding_actors ready');
+    logger.info('Table onboarding_actors ready');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS onboarding_movies (
@@ -386,7 +339,7 @@ const createTables = async () => {
         batch SMALLINT NOT NULL DEFAULT 1
       );
     `);
-    console.log('Table onboarding_movies ready');
+    logger.info('Table onboarding_movies ready');
 
     await pool.query(`
       INSERT INTO onboarding_actors (tmdb_id, name, photo_path, known_for) VALUES
@@ -415,7 +368,7 @@ const createTables = async () => {
         name = EXCLUDED.name,
         known_for = EXCLUDED.known_for;
     `);
-    console.log('Onboarding actors updated to 20');
+    logger.info('Onboarding actors updated to 20');
 
     await pool.query(`
       INSERT INTO onboarding_movies (tmdb_id, title, poster_path, year, genre, batch) VALUES
@@ -460,25 +413,14 @@ const createTables = async () => {
         genre = EXCLUDED.genre,
         batch = EXCLUDED.batch;
     `);
-    console.log('Onboarding movies updated');
-
-    await pool.query(`
-      DELETE FROM onboarding_movies
-      WHERE tmdb_id IN (962796, 765285, 882569, 614917, 1891)
-        AND tmdb_id NOT IN (
-          SELECT unnest(ARRAY[238,13,680,597,155,19995,129,4935,98,857,9806,920,585,
-                              372058,149870,496243,637,475557,105,120,424,11,694,769,
-                              558,37165,9054,128,512244,508439,301528,274,489,539,1891,550])
-        );
-    `);
-    console.log('Onboarding stale movies removed');
+    logger.info('Onboarding movies updated');
 
     await pool.query(`
       ALTER TABLE onboarding_movies
         ADD COLUMN IF NOT EXISTS media_type VARCHAR(5) NOT NULL DEFAULT 'movie'
         CHECK (media_type IN ('movie', 'tv'));
     `);
-    console.log('onboarding_movies: media_type column added');
+    logger.info('onboarding_movies: media_type column added');
 
     await pool.query(`
       INSERT INTO onboarding_movies (tmdb_id, title, poster_path, year, genre, batch, media_type) VALUES
@@ -492,7 +434,7 @@ const createTables = async () => {
         poster_path = EXCLUDED.poster_path,
         media_type = EXCLUDED.media_type;
     `);
-    console.log('Onboarding TV shows seeded');
+    logger.info('Onboarding TV shows seeded');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS user_onboarding (
@@ -508,17 +450,36 @@ const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_user_onboarding_user
         ON user_onboarding(user_id);
     `);
-    console.log('Table user_onboarding ready');
+    logger.info('Table user_onboarding ready');
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_episode_watches (
+        id              BIGSERIAL PRIMARY KEY,
+        user_id         BIGINT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        series_tmdb_id  INT     NOT NULL,
+        season_number   INT     NOT NULL,
+        episode_number  INT     NOT NULL,
+        episode_tmdb_id INT,
+        watched_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (user_id, series_tmdb_id, season_number, episode_number)
+      );
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_episode_watches_user_series
+        ON user_episode_watches(user_id, series_tmdb_id);
+    `);
+    logger.info('Table user_episode_watches ready');
 
     await pool.query(`
       ALTER TABLE tmdb_media_cache 
         ADD COLUMN IF NOT EXISTS vote_average DECIMAL(4,2) DEFAULT 0;
     `);
-    console.log('vote_average column ready');
-    console.log('All tables created successfully');
+    logger.info('vote_average column ready');
+    logger.info('All tables created successfully');
 
   } catch (err) {
-    console.error('Migration error:', err);
+    logger.error({ err }, 'Migration failed');
+    process.exitCode = 1;
   } finally {
     await pool.end();
   }

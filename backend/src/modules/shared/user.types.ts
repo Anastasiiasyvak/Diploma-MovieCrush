@@ -1,3 +1,5 @@
+export type MediaType = 'movie' | 'tv';
+
 export interface User {
   id: number;
   uuid: string;

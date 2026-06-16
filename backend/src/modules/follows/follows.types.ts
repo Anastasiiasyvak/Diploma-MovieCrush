@@ -28,3 +28,19 @@ export interface FollowCounts {
   followers_count: number;
   following_count: number;
 }
+
+export interface PublicListSummary {
+  id: number;
+  list_type: 'watched' | 'favorites' | 'watchlist' | 'custom';
+  name: string;
+  is_private: boolean;
+  items_count: number;
+}
+
+export interface FollowingRating {
+  user_id: number;
+  username: string;
+  profile_image_url: string | null;
+  overall_rating: number;
+  rated_at: Date;
+}

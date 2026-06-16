@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.middleware';
 import { computeSoulmateForUser, getMyMatch } from './soulmate.service';
 import { SoulmateResponse } from './soulmate.types';
+import logger from '../../config/logger';
 
 const formatResponse = (row: any): SoulmateResponse => {
   const score = Number(row.similarity_score);
@@ -20,7 +21,6 @@ const formatResponse = (row: any): SoulmateResponse => {
       genre: Number(row.genre_similarity),
       actor: Number(row.actor_similarity),
       mood: Number(row.mood_similarity),
-      director: Number(row.director_similarity),
       disliked: Number(row.disliked_similarity),
     },
     shared_movies_count: Number(row.shared_movies_count) || 0,
@@ -46,7 +46,7 @@ export const getMyCurrentMatch = async (req: AuthRequest, res: Response) => {
 
     res.json(formatResponse(row));
   } catch (err) {
-    console.error('getMyCurrentMatch error:', err);
+    logger.error({ err, userId: req.userId }, 'getMyCurrentMatch failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -73,7 +73,18 @@ export const recomputeMyMatch = async (req: AuthRequest, res: Response) => {
       });
       return;
     }
-    console.error('recomputeMyMatch error:', err);
+
+    if (err.message === 'Soulmate recompute throttled') {
+      const year = new Date().getFullYear();
+      const row = await getMyMatch(req.userId!, year);
+      res.status(429).json({
+        error: "You've already updated your soulmate today. Come back tomorrow!",
+        match: row ? formatResponse(row) : null,
+      });
+      return;
+    }
+
+    logger.error({ err, userId: req.userId }, 'recomputeMyMatch failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 };

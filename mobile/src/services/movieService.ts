@@ -1,5 +1,6 @@
 import api from './api';
-import { MovieActions, DetailedRating, MovieComment, MoodType, UserList } from '../types/movie.types';
+import { MediaType } from '../types/tmdb.types';
+import { MovieActions, DetailedRating, MovieComment, MoodType, UserList, BatchMediaMeta } from '../types/movie.types';
 
 export const movieService = {
   getActions: async (tmdbId: number): Promise<MovieActions> => {
@@ -10,9 +11,19 @@ export const movieService = {
   toggleAction: async (
     tmdbId: number,
     action: 'favorite' | 'watchlist' | 'watched' | 'dislike',
-    mediaType: 'movie' | 'tv' = 'movie',
+    mediaType: MediaType = 'movie',
   ): Promise<MovieActions> => {
     const res = await api.post('/movies/actions', { tmdb_id: tmdbId, action, media_type: mediaType });
+    return res.data;
+  },
+
+  markAllEpisodesWatched: async (seriesTmdbId: number): Promise<{
+    episodes_added: number;
+    episodes_watched_count: number;
+  }> => {
+    const res = await api.post('/series/episode/mark-all', {
+      series_tmdb_id: seriesTmdbId,
+    });
     return res.data;
   },
 
@@ -26,7 +37,7 @@ export const movieService = {
     return res.data.items;
   },
 
-  addToList: async (listId: number, tmdbId: number, mediaType: 'movie' | 'tv' = 'movie'): Promise<void> => {
+  addToList: async (listId: number, tmdbId: number, mediaType: MediaType = 'movie'): Promise<void> => {
     await api.post('/movies/lists/add', { list_id: listId, tmdb_id: tmdbId, media_type: mediaType });
   },
 
@@ -43,8 +54,8 @@ export const movieService = {
     return res.data;
   },
 
-  saveRating: async (tmdbId: number, rating: Partial<DetailedRating>): Promise<DetailedRating> => {
-    const res = await api.post('/movies/rating', { tmdb_id: tmdbId, ...rating });
+  saveRating: async (tmdbId: number, rating: Partial<DetailedRating>, isEpisode = false): Promise<DetailedRating> => {
+    const res = await api.post('/movies/rating', { tmdb_id: tmdbId, ...rating, is_episode: isEpisode });
     return res.data;
   },
 
@@ -102,5 +113,12 @@ export const movieService = {
 
   resetAllRatings: async (tmdbId: number): Promise<void> => {
     await api.delete(`/movies/${tmdbId}/my-ratings`);
+  },
+
+  getBatchDetails: async (
+    items: { tmdb_id: number; media_type: MediaType }[],
+  ): Promise<BatchMediaMeta[]> => {
+    const res = await api.post('/tmdb/media/batch', { items });
+    return res.data.items;
   },
 };

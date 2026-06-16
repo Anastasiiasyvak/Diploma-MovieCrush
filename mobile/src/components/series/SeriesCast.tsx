@@ -21,7 +21,7 @@ export const SeriesCast: React.FC<CastProps> = ({ cast, onPersonPress }) => {
       <Text style={styles.title}>Cast</Text>
       <FlatList
         data={cast.slice(0, 20)}
-        keyExtractor={item => String(item.id)}
+        keyExtractor={(item, index) => `cast-${item.id}-${index}`}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.list}
@@ -69,7 +69,7 @@ export const SimilarSeriesRow: React.FC<SimilarProps> = ({ series, onSeriesPress
       <Text style={styles.title}>More Like This</Text>
       <FlatList
         data={series.slice(0, 15)}
-        keyExtractor={item => String(item.id)}
+        keyExtractor={(item, index) => `similar-${item.id}-${index}`}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.list}

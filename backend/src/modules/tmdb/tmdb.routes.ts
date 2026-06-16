@@ -37,7 +37,10 @@ router.get('/tv/:id/credits', ctrl.getSeriesCredits);
 router.get('/tv/:id/images', ctrl.getSeriesImages);
 router.get('/tv/:id/videos', ctrl.getSeriesVideos);
 router.get('/tv/:id/similar', ctrl.getSimilarSeries);
+router.get('/tv/:id/recommendations', ctrl.getSeriesRecommendations);
 router.get('/tv/:id/season/:seasonNumber', ctrl.getSeasonDetail);
 router.get('/tv/:id/season/:seasonNumber/episode/:episodeNumber', ctrl.getEpisodeDetail);
+
+router.post('/media/batch', ctrl.getMediaBatch);
 
 export default router;

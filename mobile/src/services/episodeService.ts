@@ -1,9 +1,6 @@
 import api from './api';
-
-export interface WatchedEpisode {
-  season_number: number;
-  episode_number: number;
-}
+import { WatchedEpisode } from '../types/episode.types';
+export type { WatchedEpisode };
 
 export const episodeService = {
   getWatchedEpisodes: async (seriesTmdbId: number): Promise<WatchedEpisode[]> => {

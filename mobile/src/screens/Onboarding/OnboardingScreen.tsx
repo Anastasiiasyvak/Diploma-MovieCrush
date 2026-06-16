@@ -51,6 +51,9 @@ export default function OnboardingScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const [error, setError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const swipeX = useRef(new Animated.Value(0)).current;
   const swipeY = useRef(new Animated.Value(0)).current;
   const cardOpacity = useRef(new Animated.Value(1)).current;
@@ -65,20 +68,23 @@ export default function OnboardingScreen({ navigation }: any) {
   moviesRef.current = movies;
   currentBatchRef.current = currentBatch;
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const content = await onboardingService.getContent(1);
-        setActors(content.actors);
-        setMovies(content.movies);
-        moviesRef.current = content.movies;
-      } catch (e) {
-        console.error('Failed to load onboarding content:', e);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  const loadContent = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const content = await onboardingService.getContent(1);
+      setActors(content.actors);
+      setMovies(content.movies);
+      moviesRef.current = content.movies;
+    } catch (e) {
+      console.error('Failed to load onboarding content:', e);
+      setError('Could not load. Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadContent(); }, []);
 
   useEffect(() => {
     if (step === 'swipe') {
@@ -170,17 +176,19 @@ export default function OnboardingScreen({ navigation }: any) {
 
   const handleFinish = async () => {
     setSaving(true);
+    setSaveError(null);
     try {
       await onboardingService.complete({
         liked_actor_ids: Array.from(likedActors),
         watched_tmdb_ids: watchedIds,
         ratings,
       });
+      setStep('done');
     } catch (e) {
       console.error('Failed to save onboarding:', e);
+      setSaveError("Couldn't save. Check your connection and try again.");
     } finally {
       setSaving(false);
-      setStep('done');
     }
   };
 
@@ -200,6 +208,19 @@ export default function OnboardingScreen({ navigation }: any) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={COLORS.pink} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.centered}>
+        <StatusBar barStyle="light-content" />
+        <Text style={styles.emptyEmoji}>😕</Text>
+        <Text style={styles.doneSub}>{error}</Text>
+        <TouchableOpacity style={styles.doneBtn} onPress={loadContent}>
+          <Text style={styles.doneBtnText}>Try again</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -377,10 +398,11 @@ export default function OnboardingScreen({ navigation }: any) {
         </ScrollView>
 
         <View style={styles.bottomBar}>
+          {saveError && <Text style={styles.saveErrorText}>{saveError}</Text>}
           <TouchableOpacity style={styles.nextBtn} onPress={handleFinish} disabled={saving}>
             {saving
               ? <ActivityIndicator color={COLORS.background} />
-              : <Text style={styles.nextBtnText}>Finish →</Text>
+              : <Text style={styles.nextBtnText}>{saveError ? 'Retry →' : 'Finish →'}</Text>
             }
           </TouchableOpacity>
         </View>

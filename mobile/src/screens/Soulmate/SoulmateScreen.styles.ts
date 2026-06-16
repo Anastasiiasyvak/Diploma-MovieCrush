@@ -11,14 +11,6 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  loadingText: {
-    fontFamily: FONTS.regular,
-    fontSize: 14,
-    color: COLORS.gray,
-    marginTop: 14,
-    textAlign: 'center',
-  },
-
   scrollContent: { alignItems: 'center', paddingBottom: 40 },
   inner: { width: '100%', maxWidth: 480 },
 
@@ -238,5 +230,12 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 24,
     marginTop: 24,
     lineHeight: 16,
+  },
+  cooldownNote: {
+    fontFamily: FONTS.medium,
+    fontSize: 13,
+    color: COLORS.cardTextLight,
+    textAlign: 'center',
+    paddingVertical: 14,
   },
 });

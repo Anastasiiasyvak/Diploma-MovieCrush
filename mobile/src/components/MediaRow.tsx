@@ -4,43 +4,53 @@ import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 import { MovieCard } from './MovieCard';
 import { Movie, TVSeries } from '../services/tmdbService';
+import { MediaType } from '../types/tmdb.types';
 
 interface SectionProps {
   title: string;
   data: (Movie | TVSeries)[];
-  type: 'movie' | 'tv';
+  type: MediaType;
   onItemPress?: (item: Movie | TVSeries) => void;
 }
 
-export const Section: React.FC<SectionProps> = ({ title, data, type, onItemPress }) => (
-  <View style={styles.section}>
-    <Text style={styles.sectionTitle}>{title}</Text>
-    <FlatList
-      data={data.slice(0, 10)}
-      keyExtractor={item => item.id.toString()}
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.list}
-      renderItem={({ item }) => {
-        const isMovie = type === 'movie';
-        const movie = item as Movie;
-        const series = item as TVSeries;
-        return (
-          <MovieCard
-            posterPath={item.poster_path}
-            title={isMovie ? movie.title : series.name}
-            year={isMovie
-              ? movie.release_date?.slice(0, 4)
-              : series.first_air_date?.slice(0, 4)
-            }
-            rating={item.vote_average}
-            onPress={() => onItemPress?.(item)}
-          />
-        );
-      }}
-    />
-  </View>
-);
+export const Section: React.FC<SectionProps> = ({ title, data, type, onItemPress }) => {
+  const seen = new Set<number>();
+  const uniqueData = data.filter(item => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <FlatList
+        data={uniqueData.slice(0, 10)}
+        keyExtractor={item => `${type}-${item.id}`}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.list}
+        renderItem={({ item }) => {
+          const isMovie = type === 'movie';
+          const movie = item as Movie;
+          const series = item as TVSeries;
+          return (
+            <MovieCard
+              posterPath={item.poster_path}
+              title={isMovie ? movie.title : series.name}
+              year={isMovie
+                ? movie.release_date?.slice(0, 4)
+                : series.first_air_date?.slice(0, 4)
+              }
+              rating={item.vote_average}
+              onPress={() => onItemPress?.(item)}
+            />
+          );
+        }}
+      />
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   section: { paddingTop: 20 },

@@ -1,18 +1,16 @@
 import pool from '../../config/database';
 import { SimilarityBreakdown } from './soulmate.types';
-
-const WEIGHTS = {
-  rating: 0.40,
-  genre: 0.20,
-  actor: 0.15,
-  mood: 0.10,
-  director: 0.10,
-  disliked: 0.05,
-} as const;
-
-const MIN_RATING_OVERLAP = 3;
-const MIN_USER_MOVIES = 5;
-const MIN_SCORE_THRESHOLD = 0.30;
+import {
+  MIN_RATING_OVERLAP,
+  MIN_USER_MOVIES,
+  MIN_SCORE_THRESHOLD,
+  cosineSimilarity,
+  cosineSimilarityFromCounts,
+  jaccard,
+  weightedSum,
+  isRecomputeThrottled,
+  buildRatingVectors,
+} from './soulmate.math';
 
 const computeRatingCosineSimilarity = async (
   userA: number, userB: number
@@ -35,30 +33,9 @@ const computeRatingCosineSimilarity = async (
     return { similarity: 0, sharedMovies: [] };
   }
 
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-  const sharedMovies: number[] = [];
-
-  for (const row of result.rows) {
-    const rA = Number(row.rating_a);
-    const rB = Number(row.rating_b);
-    dotProduct += rA * rB;
-    normA += rA * rA;
-    normB += rB * rB;
-    sharedMovies.push(Number(row.tmdb_id));
-  }
-
-  const denom = Math.sqrt(normA) * Math.sqrt(normB);
-  const similarity = denom === 0 ? 0 : dotProduct / denom;
+  const { vectorA, vectorB, sharedMovies } = buildRatingVectors(result.rows);
+  const similarity = cosineSimilarity(vectorA, vectorB);
   return { similarity, sharedMovies };
-};
-
-const jaccard = <T>(setA: Set<T>, setB: Set<T>): number => {
-  if (setA.size === 0 && setB.size === 0) return 0;
-  const intersection = [...setA].filter(x => setB.has(x)).length;
-  const union = setA.size + setB.size - intersection;
-  return union === 0 ? 0 : intersection / union;
 };
 
 const computeWatchedOverlap = async (
@@ -127,39 +104,7 @@ const computeMoodSimilarity = async (
     else                                moodsB[row.mood] = Number(row.cnt);
   }
 
-  const allMoods = new Set([...Object.keys(moodsA), ...Object.keys(moodsB)]);
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-  for (const m of allMoods) {
-    const a = moodsA[m] ?? 0;
-    const b = moodsB[m] ?? 0;
-    dotProduct += a * b;
-    normA += a * a;
-    normB += b * b;
-  }
-  const denom = Math.sqrt(normA) * Math.sqrt(normB);
-  return denom === 0 ? 0 : dotProduct / denom;
-};
-
-const computeDirectorOverlap = async (
-  userA: number, userB: number
-): Promise<number> => {
-  const [resA, resB] = await Promise.all([
-    pool.query(
-      `SELECT DISTINCT top_director_tmdb_id FROM user_yearly_stats
-       WHERE user_id = $1 AND top_director_tmdb_id IS NOT NULL`,
-      [userA]
-    ),
-    pool.query(
-      `SELECT DISTINCT top_director_tmdb_id FROM user_yearly_stats
-       WHERE user_id = $1 AND top_director_tmdb_id IS NOT NULL`,
-      [userB]
-    ),
-  ]);
-  const setA = new Set(resA.rows.map(r => Number(r.top_director_tmdb_id)));
-  const setB = new Set(resB.rows.map(r => Number(r.top_director_tmdb_id)));
-  return jaccard(setA, setB);
+  return cosineSimilarityFromCounts(moodsA, moodsB);
 };
 
 const computeDislikedOverlap = async (
@@ -198,24 +143,22 @@ export const computeHybridSimilarity = async (
     genre,
     actor,
     mood,
-    director,
     disliked,
   ] = await Promise.all([
     computeRatingCosineSimilarity(userA, userB),
     computeWatchedOverlap(userA, userB),
     computeActorOverlap(userA, userB),
     computeMoodSimilarity(userA, userB),
-    computeDirectorOverlap(userA, userB),
     computeDislikedOverlap(userA, userB),
   ]);
 
-  const total =
-    WEIGHTS.rating * rating.similarity +
-    WEIGHTS.genre * genre +
-    WEIGHTS.actor * actor +
-    WEIGHTS.mood * mood +
-    WEIGHTS.director * director +
-    WEIGHTS.disliked * disliked.similarity;
+  const total = weightedSum({
+    rating: rating.similarity,
+    genre,
+    actor,
+    mood,
+    disliked: disliked.similarity,
+  });
 
   return {
     total,
@@ -223,7 +166,6 @@ export const computeHybridSimilarity = async (
     genre_similarity: genre,
     actor_similarity: actor,
     mood_similarity: mood,
-    director_similarity: director,
     disliked_similarity: disliked.similarity,
     sharedMovies: rating.sharedMovies,
     sharedDisliked: disliked.sharedDisliked,
@@ -242,6 +184,20 @@ const getEligibleCandidates = async (userId: number): Promise<number[]> => {
   return result.rows.map(r => Number(r.id));
 };
 
+export const getLastComputedAt = async (
+  userId: number,
+  year: number
+): Promise<Date | null> => {
+  const result = await pool.query(
+    `SELECT computed_at FROM user_soulmate_matches
+     WHERE user_id = $1 AND wrapped_year = $2`,
+    [userId, year]
+  );
+  if (result.rows.length === 0) return null;
+  return new Date(result.rows[0].computed_at);
+};
+
+
 export const computeSoulmateForUser = async (
   userId: number,
   wrappedYear: number = new Date().getFullYear()
@@ -252,6 +208,11 @@ export const computeSoulmateForUser = async (
   );
   if (meCheck.rows.length === 0) throw new Error('User not found');
   if (!meCheck.rows[0].soulmate_consent) throw new Error('User did not consent to soulmate matching');
+
+  const lastComputed = await getLastComputedAt(userId, wrappedYear);
+  if (isRecomputeThrottled(lastComputed)) {
+    throw new Error('Soulmate recompute throttled');
+  }
 
   const candidates = await getEligibleCandidates(userId);
   if (candidates.length === 0) return null;
@@ -281,14 +242,14 @@ export const computeSoulmateForUser = async (
        user_id, matched_user_id, wrapped_year,
        similarity_score,
        rating_similarity, genre_similarity, actor_similarity,
-       mood_similarity, director_similarity, disliked_similarity,
+       mood_similarity, disliked_similarity,
        shared_movies_count, top_shared_movies, shared_disliked
      ) VALUES (
        $1, $2, $3,
        $4,
        $5, $6, $7,
-       $8, $9, $10,
-       $11, $12, $13
+       $8, $9,
+       $10, $11, $12
      )
      ON CONFLICT (user_id, wrapped_year) DO UPDATE SET
        matched_user_id = EXCLUDED.matched_user_id,
@@ -297,7 +258,6 @@ export const computeSoulmateForUser = async (
        genre_similarity = EXCLUDED.genre_similarity,
        actor_similarity = EXCLUDED.actor_similarity,
        mood_similarity = EXCLUDED.mood_similarity,
-       director_similarity = EXCLUDED.director_similarity,
        disliked_similarity = EXCLUDED.disliked_similarity,
        shared_movies_count = EXCLUDED.shared_movies_count,
        top_shared_movies = EXCLUDED.top_shared_movies,
@@ -310,7 +270,6 @@ export const computeSoulmateForUser = async (
       bestBreakdown.genre_similarity.toFixed(4),
       bestBreakdown.actor_similarity.toFixed(4),
       bestBreakdown.mood_similarity.toFixed(4),
-      bestBreakdown.director_similarity.toFixed(4),
       bestBreakdown.disliked_similarity.toFixed(4),
       bestBreakdown.sharedMovies.length,
       topShared,
@@ -335,7 +294,6 @@ export const getMyMatch = async (
        sm.genre_similarity,
        sm.actor_similarity,
        sm.mood_similarity,
-       sm.director_similarity,
        sm.disliked_similarity,
        sm.shared_movies_count,
        sm.top_shared_movies,

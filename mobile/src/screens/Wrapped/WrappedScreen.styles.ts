@@ -12,12 +12,6 @@ export const styles = StyleSheet.create({
     gap: 14,
   },
 
-  loadingText: {
-    fontFamily: FONTS.regular,
-    fontSize: 14,
-    color: COLORS.gray,
-  },
-
   scrollContent: { alignItems: 'center', paddingBottom: 40 },
   inner: { width: '100%', maxWidth: 480 },
 
@@ -167,34 +161,6 @@ export const styles = StyleSheet.create({
     fontFamily: FONTS.regular,
     fontSize: 12,
     color: 'rgba(255,255,255,0.65)',
-  },
-
-  topMovieRow: {
-    flexDirection: 'row',
-    gap: 14,
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  topMoviePoster: {
-    width: 86, height: 128, borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  topMovieInfo: { flex: 1, gap: 6 },
-  topMovieTitle: {
-    fontFamily: FONTS.semiBold,
-    fontSize: 18,
-    color: COLORS.white,
-    lineHeight: 22,
-  },
-  topMovieRating: {
-    fontFamily: FONTS.medium,
-    fontSize: 24,
-    color: COLORS.gold,
-  },
-  topMovieRatingLabel: {
-    fontFamily: FONTS.regular,
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
   },
 
   topFanLine: {

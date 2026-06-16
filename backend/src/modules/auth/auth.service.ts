@@ -5,8 +5,9 @@ import { sendVerificationEmail, sendResetPasswordEmail } from '../../config/emai
 import { RegisterInput, LoginInput } from './auth.types';
 import { User } from '../shared/user.types';
 import { createDefaultLists } from '../lists/lists.service';
+import logger from '../../config/logger';
 
-const isEmailVerificationEnabled = (): boolean =>
+export const isEmailVerificationEnabled = (): boolean =>
   process.env.EMAIL_VERIFICATION_ENABLED === 'true';
 
 export const registerUser = async (input: RegisterInput): Promise<User> => {
@@ -43,10 +44,10 @@ export const registerUser = async (input: RegisterInput): Promise<User> => {
 
   if (verificationEnabled && verificationToken) {
     sendVerificationEmail(email, username, verificationToken)
-      .then(() => console.log('Verification email sent to:', email))
-      .catch(err => console.error('Failed to send verification email:', err.message));
+      .then(() => logger.info({ email }, 'Verification email sent'))
+      .catch(err => logger.error({ err, email }, 'Failed to send verification email'));
   } else {
-    console.log(`[dev] Email verification disabled — user ${email} auto-activated`);
+    logger.info({ email }, '[dev] Email verification disabled, user auto-activated');
   }
 
   return user;
@@ -106,8 +107,8 @@ export const requestPasswordReset = async (email: string): Promise<void> => {
   );
 
   sendResetPasswordEmail(email, user.username, resetToken)
-    .then(() => console.log('Reset password email sent to:', email))
-    .catch(err => console.error('Failed to send reset email:', err.message));
+    .then(() => logger.info({ email }, 'Reset password email sent'))
+    .catch(err => logger.error({ err, email }, 'Failed to send reset email'));
 };
 
 export const resetPassword = async (token: string, newPassword: string): Promise<boolean> => {

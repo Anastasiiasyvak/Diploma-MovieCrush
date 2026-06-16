@@ -3,19 +3,21 @@ import { fetchFromTMDB } from '../tmdb/tmdb.service';
 import { callGemini, getModelName } from './gemini.service';
 import { PersonalizedItem, PersonalizedResponse, TaggedItem } from './als_service';
 import { WatchedMovieForPrompt } from './recommendations.types';
+import { MediaType } from '../shared/user.types';
+import logger from '../../config/logger';
 
 const CACHE_TTL_HOURS = 24;
 const WATCHED_SAMPLE_SIZE = 10;  
 const MIN_ACCEPTABLE = 5;
 
 interface WatchedRow extends WatchedMovieForPrompt {
-  media_type: 'movie' | 'tv';
+  media_type: MediaType;
   _updatedAt: Date;
 }
 
 const resolveTitleFromTmdb = async (
   tmdbId: number,
-): Promise<{ title: string; media_type: 'movie' | 'tv' } | null> => {
+): Promise<{ title: string; media_type: MediaType } | null> => {
   try {
     const movie = await fetchFromTMDB<{ title?: string }>(`/movie/${tmdbId}`);
     if (movie.title) return { title: movie.title, media_type: 'movie' };
@@ -243,7 +245,7 @@ export const rerankWithGemini = async (
 ): Promise<PersonalizedResponse> => {
   const cached = await getCachedPersonalized(userId);
   if (cached) {
-    console.log(`[Rerank] Cache hit for user ${userId} (expires: ${cached.expires_at.toISOString()})`);
+    logger.debug(`[Rerank] Cache hit for user ${userId} (expires: ${cached.expires_at.toISOString()})`);
     return {
       recommendations: cached.recommendations,
       strategy: 'personalized',
@@ -261,44 +263,43 @@ export const rerankWithGemini = async (
   const allWatched = await getAllWatchedMovies(userId);
   const watchedSample = selectWatchedForRerank(allWatched);
 
-  console.log(`\n${'─'.repeat(60)}`);
-  console.log(`[Rerank] User ${userId} | candidates: ${candidates.length} | watched sample: ${watchedSample.length}/${allWatched.length}`);
+  logger.debug(`[Rerank] User ${userId} | candidates: ${candidates.length} | watched sample: ${watchedSample.length}/${allWatched.length}`);
 
   const alsItems = candidates.filter(c => c.source === 'als');
   const discoverItems = candidates.filter(c => c.source === 'discover');
 
-  console.log(`\n[Rerank] ALS candidates (${alsItems.length}):`);
+  logger.debug(`\n[Rerank] ALS candidates (${alsItems.length}):`);
   for (const c of alsItems) {
-    console.log(`  [ALS] tmdb_id:${c.tmdb_id} | "${c.title}" | ${c.vote_average.toFixed(1)} | ${c.media_type}`);
+    logger.debug(`  [ALS] tmdb_id:${c.tmdb_id} | "${c.title}" | ${c.vote_average.toFixed(1)} | ${c.media_type}`);
   }
 
-  console.log(`\n[Rerank] Discover candidates (${discoverItems.length}):`);
+  logger.debug(`\n[Rerank] Discover candidates (${discoverItems.length}):`);
   for (const c of discoverItems) {
-    console.log(`  [DISC] tmdb_id:${c.tmdb_id} | "${c.title}" | ${c.vote_average.toFixed(1)} | ${c.media_type}`);
+    logger.debug(`  [DISC] tmdb_id:${c.tmdb_id} | "${c.title}" | ${c.vote_average.toFixed(1)} | ${c.media_type}`);
   }
 
-  console.log(`\n[Rerank] Watched sample for context (${watchedSample.length}/${allWatched.length} total):`);
+  logger.debug(`\n[Rerank] Watched sample for context (${watchedSample.length}/${allWatched.length} total):`);
   for (const m of watchedSample) {
     const parts: string[] = [];
     if (m.rating !== null) parts.push(`${m.rating}/10`);
     if (m.is_favorite) parts.push('fav');
     if (m.is_disliked) parts.push('disliked');
-    console.log(`  "${m.title}"${parts.length ? ' | ' + parts.join(' | ') : ''}`);
+    logger.debug(`  "${m.title}"${parts.length ? ' | ' + parts.join(' | ') : ''}`);
   }
 
   const prompt = buildRerankPrompt(candidates, watchedSample, watchedCount);
-  console.log(`\n[Rerank] Prompt length: ${prompt.length} chars → sending to Gemini...`);
+  logger.debug(`\n[Rerank] Prompt length: ${prompt.length} chars → sending to Gemini...`);
 
   let rerankResult: GeminiRerankResponse;
   try {
     rerankResult = await callGemini(prompt) as unknown as GeminiRerankResponse;
   } catch (err) {
-    console.error('[Rerank] Gemini failed, using ALS-priority fallback:', err);
+    logger.error({ err, userId }, '[Rerank] Gemini failed, using ALS-priority fallback');
     // Fallback: ALS в пріоритеті (вже відсортований за cf моделюю) Discover тільки добирає якщо ALS не вистачило до 25
     const alsCandidates = candidates.filter(c => c.source === 'als');
     const discoverCandidates = candidates.filter(c => c.source === 'discover');
     const fallbackPool = [...alsCandidates, ...discoverCandidates].slice(0, 15);
-    console.log(`[Rerank] Fallback pool: ${alsCandidates.length} ALS + ${Math.max(0, 15 - alsCandidates.length)} Discover`);
+    logger.debug(`[Rerank] Fallback pool: ${alsCandidates.length} ALS + ${Math.max(0, 15 - alsCandidates.length)} Discover`);
     const fallback: PersonalizedItem[] = fallbackPool.map(c => ({
       tmdb_id: c.tmdb_id,
       media_type: c.media_type,
@@ -322,7 +323,7 @@ export const rerankWithGemini = async (
   const candidateMap = new Map(candidates.map(c => [c.tmdb_id, c]));
   const reranked: PersonalizedItem[] = [];
 
-  console.log(`\n[Rerank] Gemini returned ${rerankResult.recommendations?.length ?? 0} items:`);
+  logger.debug(`\n[Rerank] Gemini returned ${rerankResult.recommendations?.length ?? 0} items:`);
 
   const VALID_CATEGORIES = ['strong_match', 'diversity', 'hidden_gem'] as const;
   type Category = typeof VALID_CATEGORIES[number];
@@ -334,12 +335,12 @@ export const rerankWithGemini = async (
   for (const rec of rerankResult.recommendations ?? []) {
     const candidate = candidateMap.get(rec.tmdb_id);
     if (!candidate) {
-      console.warn(`  Unknown tmdb_id ${rec.tmdb_id} — skipping`);
+      logger.warn({ tmdbId: rec.tmdb_id }, 'Unknown tmdb_id in Gemini response, skipping');
       continue;
     }
     const cat: Category = isValidCategory(rec.category) ? rec.category : 'strong_match';
     categoryCount[cat] += 1;
-    console.log(`  [${cat}] [${candidate.source.toUpperCase()}] tmdb_id:${rec.tmdb_id} "${candidate.title}"`);
+    logger.debug(`  [${cat}] [${candidate.source.toUpperCase()}] tmdb_id:${rec.tmdb_id} "${candidate.title}"`);
     reranked.push({
       tmdb_id: candidate.tmdb_id,
       media_type: candidate.media_type,
@@ -352,16 +353,16 @@ export const rerankWithGemini = async (
     });
   }
 
-  console.log(`\n[Rerank] Categories: strong_match=${categoryCount.strong_match} diversity=${categoryCount.diversity} hidden_gem=${categoryCount.hidden_gem}`);
+  logger.debug(`\n[Rerank] Categories: strong_match=${categoryCount.strong_match} diversity=${categoryCount.diversity} hidden_gem=${categoryCount.hidden_gem}`);
 
   // Fallback padding якщо дуже мало
   if (reranked.length < MIN_ACCEPTABLE) {
-    console.warn(`[Rerank] Only ${reranked.length} usable results (min: ${MIN_ACCEPTABLE}), padding...`);
+    logger.warn({ usable: reranked.length, min: MIN_ACCEPTABLE }, 'Too few rerank results, padding');
     const usedIds = new Set(reranked.map(r => r.tmdb_id));
     for (const c of candidates) {
       if (reranked.length >= 15) break;
       if (!usedIds.has(c.tmdb_id)) {
-        console.log(`  + padding [${c.source.toUpperCase()}] tmdb_id:${c.tmdb_id} "${c.title}"`);
+        logger.debug(`  + padding [${c.source.toUpperCase()}] tmdb_id:${c.tmdb_id} "${c.title}"`);
         reranked.push({
           tmdb_id: c.tmdb_id,
           media_type: c.media_type,
@@ -380,8 +381,7 @@ export const rerankWithGemini = async (
   const modelUsed = getModelName();
   await savePersonalizedToCache(userId, reranked, modelUsed, watchedCount);
 
-  console.log(`[Rerank] Final: ${reranked.length} recommendations saved to cache (TTL: ${CACHE_TTL_HOURS}h, table: user_ai_recommendations)`);
-  console.log(`${'═'.repeat(60)}\n`);
+  logger.debug(`[Rerank] Final: ${reranked.length} recommendations saved to cache (TTL: ${CACHE_TTL_HOURS}h, table: user_ai_recommendations)`);
 
   return {
     recommendations: reranked,
